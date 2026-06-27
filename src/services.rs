@@ -26,3 +26,19 @@ pub fn create_vehicle_service(
 
     Ok(vehicle)
 }
+
+pub fn list_vehicles_service(state: &AppState) -> Vec<Vehicle> {
+    let vehicles = state.vehicles.lock().unwrap();
+
+    vehicles.clone()
+}
+
+pub fn get_vehicle_service(state: &AppState, id: u32) -> Result<Vehicle, StatusCode> {
+    let vehicles = state.vehicles.lock().unwrap();
+
+    vehicles
+        .iter()
+        .find(|vehicle| vehicle.id == id)
+        .cloned()
+        .ok_or(StatusCode::NOT_FOUND)
+}
