@@ -1,9 +1,26 @@
 use axum::http::StatusCode;
+use uuid::Uuid;
 
-use crate::models::{CreateVehicleRequest, Vehicle};
-use crate::state::AppState;
+use crate::{
+    models::{CreateVehicleRequest, Vehicle},
+    repositories,
+    state::AppState,
+};
 
-pub fn create_vehicle_service(
+pub async fn list_vehicles_service(state: &AppState) -> Result<Vec<Vehicle>, StatusCode> {
+    repositories::list_vehicles(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+pub async fn get_vehicle_service(state: &AppState, id: Uuid) -> Result<Vehicle, StatusCode> {
+    repositories::get_vehicle(&state.db, id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)
+}
+
+pub async fn create_vehicle_service(
     state: &AppState,
     request: CreateVehicleRequest,
 ) -> Result<Vehicle, StatusCode> {
@@ -11,34 +28,15 @@ pub fn create_vehicle_service(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let mut vehicles = state.vehicles.lock().unwrap();
+    let result = repositories::create_vehicle(
+        &state.db,
+        Uuid::new_v4(),
+        request.vin,
+        request.model,
+        "offline".to_string(),
+    )
+    .await;
 
-    let new_id = vehicles.len() as u32 + 1;
-
-    let vehicle = Vehicle {
-        id: new_id,
-        vin: request.vin,
-        model: request.model,
-        status: "offline".to_string(),
-    };
-
-    vehicles.push(vehicle.clone());
-
+    let vehicle = result.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(vehicle)
-}
-
-pub fn list_vehicles_service(state: &AppState) -> Vec<Vehicle> {
-    let vehicles = state.vehicles.lock().unwrap();
-
-    vehicles.clone()
-}
-
-pub fn get_vehicle_service(state: &AppState, id: u32) -> Result<Vehicle, StatusCode> {
-    let vehicles = state.vehicles.lock().unwrap();
-
-    vehicles
-        .iter()
-        .find(|vehicle| vehicle.id == id)
-        .cloned()
-        .ok_or(StatusCode::NOT_FOUND)
 }
