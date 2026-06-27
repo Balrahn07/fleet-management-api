@@ -1,9 +1,10 @@
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 
+use crate::services::create_vehicle_service;
 use crate::{
     models::{CreateVehicleRequest, Vehicle},
     state::AppState,
@@ -13,9 +14,7 @@ pub async fn health_check() -> &'static str {
     "OK"
 }
 
-pub async fn list_vehicles(
-    State(state): State<AppState>,
-) -> Json<Vec<Vehicle>> {
+pub async fn list_vehicles(State(state): State<AppState>) -> Json<Vec<Vehicle>> {
     let vehicles = state.vehicles.lock().unwrap();
 
     Json(vehicles.clone())
@@ -39,22 +38,7 @@ pub async fn create_vehicle(
     State(state): State<AppState>,
     Json(request): Json<CreateVehicleRequest>,
 ) -> Result<(StatusCode, Json<Vehicle>), StatusCode> {
-    if request.vin.trim().is_empty() || request.model.trim().is_empty() {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-
-    let mut vehicles = state.vehicles.lock().unwrap();
-
-    let new_id = vehicles.len() as u32 + 1;
-
-    let vehicle = Vehicle {
-        id: new_id,
-        vin: request.vin,
-        model: request.model,
-        status: "offline".to_string(),
-    };
-
-    vehicles.push(vehicle.clone());
+    let vehicle = create_vehicle_service(&state, request)?;
 
     Ok((StatusCode::CREATED, Json(vehicle)))
 }

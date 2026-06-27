@@ -1,14 +1,12 @@
 mod handlers;
 mod models;
 mod routes;
+mod services;
 mod state;
 
 use std::net::SocketAddr;
 
-use crate::{
-    routes::create_routes,
-    state::AppState,
-};
+use crate::{routes::create_routes, state::AppState};
 
 #[tokio::main]
 async fn main() {
@@ -21,10 +19,7 @@ async fn main() {
 
     tracing::info!("server running on http://{}", addr);
 
-    axum::serve(
-        tokio::net::TcpListener::bind(addr).await.unwrap(),
-        app,
-    )
-    .await
-    .unwrap();
+    axum::serve(tokio::net::TcpListener::bind(addr).await.unwrap(), app)
+        .await
+        .unwrap();
 }

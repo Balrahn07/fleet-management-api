@@ -1,10 +1,10 @@
-use axum::{
-    routing::{get, post},
-    Router,
-};
 use crate::{
     handlers::{create_vehicle, get_vehicle, health_check, list_vehicles},
     state::AppState,
+};
+use axum::{
+    Router,
+    routing::{get, post},
 };
 
 pub fn create_routes(state: AppState) -> Router {
