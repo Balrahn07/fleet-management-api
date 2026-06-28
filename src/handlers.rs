@@ -1,6 +1,7 @@
-use crate::services::{create_vehicle_service, get_vehicle_service, list_vehicles_service};
+use crate::errors::AppError;
 use crate::{
     models::{CreateVehicleRequest, Vehicle},
+    services::{create_vehicle_service, get_vehicle_service, list_vehicles_service},
     state::AppState,
 };
 use axum::{
@@ -14,9 +15,7 @@ pub async fn health_check() -> &'static str {
     "OK"
 }
 
-pub async fn list_vehicles(
-    State(state): State<AppState>,
-) -> Result<Json<Vec<Vehicle>>, StatusCode> {
+pub async fn list_vehicles(State(state): State<AppState>) -> Result<Json<Vec<Vehicle>>, AppError> {
     let vehicles = list_vehicles_service(&state).await?;
 
     Ok(Json(vehicles))
@@ -25,7 +24,7 @@ pub async fn list_vehicles(
 pub async fn get_vehicle(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
-) -> Result<Json<Vehicle>, StatusCode> {
+) -> Result<Json<Vehicle>, AppError> {
     let vehicle = get_vehicle_service(&state, id).await?;
 
     Ok(Json(vehicle))
@@ -34,7 +33,7 @@ pub async fn get_vehicle(
 pub async fn create_vehicle(
     State(state): State<AppState>,
     Json(request): Json<CreateVehicleRequest>,
-) -> Result<(StatusCode, Json<Vehicle>), StatusCode> {
+) -> Result<(StatusCode, Json<Vehicle>), AppError> {
     let vehicle = create_vehicle_service(&state, request).await?;
 
     Ok((StatusCode::CREATED, Json(vehicle)))

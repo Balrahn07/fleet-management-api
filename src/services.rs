@@ -1,4 +1,4 @@
-use axum::http::StatusCode;
+use crate::errors::AppError;
 use uuid::Uuid;
 
 use crate::{
@@ -7,25 +7,25 @@ use crate::{
     state::AppState,
 };
 
-pub async fn list_vehicles_service(state: &AppState) -> Result<Vec<Vehicle>, StatusCode> {
+pub async fn list_vehicles_service(state: &AppState) -> Result<Vec<Vehicle>, AppError> {
     repositories::list_vehicles(&state.db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+        .map_err(|_| AppError::Database)
 }
 
-pub async fn get_vehicle_service(state: &AppState, id: Uuid) -> Result<Vehicle, StatusCode> {
+pub async fn get_vehicle_service(state: &AppState, id: Uuid) -> Result<Vehicle, AppError> {
     repositories::get_vehicle(&state.db, id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)
+        .map_err(|_| AppError::Database)?
+        .ok_or(AppError::NotFound)
 }
 
 pub async fn create_vehicle_service(
     state: &AppState,
     request: CreateVehicleRequest,
-) -> Result<Vehicle, StatusCode> {
+) -> Result<Vehicle, AppError> {
     if request.vin.trim().is_empty() || request.model.trim().is_empty() {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::InvalidInput);
     }
 
     let result = repositories::create_vehicle(
@@ -37,6 +37,6 @@ pub async fn create_vehicle_service(
     )
     .await;
 
-    let vehicle = result.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let vehicle = result.map_err(|_| AppError::Database)?;
     Ok(vehicle)
 }
