@@ -67,11 +67,8 @@ fn map_create_vehicle_error(error: sqlx::Error) -> AppError {
     }
 }
 
-
 /// Validates the input required to create a vehicle.
-fn validate_create_vehicle_request(
-    request: &CreateVehicleRequest,
-) -> Result<(), AppError> {
+fn validate_create_vehicle_request(request: &CreateVehicleRequest) -> Result<(), AppError> {
     if request.vin.trim().is_empty() {
         warn!("Rejected vehicle creation: VIN is empty.");
         return Err(AppError::EmptyVin);
@@ -88,4 +85,22 @@ fn validate_create_vehicle_request(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::CreateVehicleRequest;
+
+    #[test]
+    fn validate_request_rejects_empty_vin() {
+        let request = CreateVehicleRequest {
+            vin: "".to_string(),
+            model: "Tesla Model 3".to_string(),
+        };
+
+        let result = validate_create_vehicle_request(&request);
+
+        assert!(matches!(result, Err(AppError::EmptyVin)));
+    }
 }

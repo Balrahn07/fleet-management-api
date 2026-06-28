@@ -25,12 +25,11 @@ async fn main() {
         .await
         .expect("Failed to connect to database");
     let state = AppState { db };
-    let app = create_routes(state)
-        .layer(
-            TraceLayer::new_for_http()
-                .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
-                .on_response(DefaultOnResponse::new().level(Level::INFO)),
-        );
+    let app = create_routes(state).layer(
+        TraceLayer::new_for_http()
+            .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+            .on_response(DefaultOnResponse::new().level(Level::INFO)),
+    );
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
 
