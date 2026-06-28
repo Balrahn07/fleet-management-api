@@ -9,6 +9,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
+use tracing::info;
 use uuid::Uuid;
 
 pub async fn health_check() -> &'static str {
@@ -34,6 +35,12 @@ pub async fn create_vehicle(
     State(state): State<AppState>,
     Json(request): Json<CreateVehicleRequest>,
 ) -> Result<(StatusCode, Json<Vehicle>), AppError> {
+    info!(
+        vin = %request.vin,
+        model = %request.model,
+        "Creating vehicle"
+    );
+
     let vehicle = create_vehicle_service(&state, request).await?;
 
     Ok((StatusCode::CREATED, Json(vehicle)))

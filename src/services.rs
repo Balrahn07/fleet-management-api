@@ -6,6 +6,7 @@ use crate::{
     repositories,
     state::AppState,
 };
+use tracing::{info, warn};
 
 pub async fn list_vehicles_service(state: &AppState) -> Result<Vec<Vehicle>, AppError> {
     repositories::list_vehicles(&state.db)
@@ -31,11 +32,16 @@ pub async fn create_vehicle_service(
     state: &AppState,
     request: CreateVehicleRequest,
 ) -> Result<Vehicle, AppError> {
+    info!("Validating create vehicle request.");
+
     if request.vin.trim().is_empty() {
+        warn!("Rejected vehicle creation: VIN is empty.");
         return Err(AppError::EmptyVin);
     } else if request.model.trim().is_empty() {
+        warn!("Rejected vehicle creation: model is empty.");
         return Err(AppError::EmptyModel);
     } else if request.vin.len() != 17 {
+        warn!("Rejected vehicle creation: VIN has invalid length.");
         return Err(AppError::InvalidVinLength);
     }
 
