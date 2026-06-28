@@ -1,11 +1,3 @@
-mod errors;
-mod handlers;
-mod models;
-mod repositories;
-mod routes;
-mod services;
-mod state;
-
 use std::{env, net::SocketAddr};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing::Level;
@@ -13,7 +5,7 @@ use tracing::Level;
 use dotenvy::dotenv;
 use sqlx::PgPool;
 
-use crate::{routes::create_routes, state::AppState};
+use fleet_management_api::{routes::create_routes, state::AppState};
 
 #[tokio::main]
 async fn main() {

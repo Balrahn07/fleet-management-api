@@ -89,7 +89,6 @@ fn validate_create_vehicle_request(request: &CreateVehicleRequest) -> Result<(),
 
 #[cfg(test)]
 mod tests {
-    use std::result;
 
     use super::*;
     use crate::models::CreateVehicleRequest;
