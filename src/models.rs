@@ -13,7 +13,7 @@ pub struct Vehicle {
 }
 
 #[derive(Deserialize)]
-pub struct CreateVehicleRequest {
+pub struct VehicleRequest {
     pub vin: String,
     pub model: String,
 }
