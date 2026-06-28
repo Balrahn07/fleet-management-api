@@ -2,7 +2,7 @@ use crate::errors::AppError;
 use uuid::Uuid;
 
 use crate::{
-    models::{CreateVehicleRequest, Vehicle},
+    models::{VehicleRequest, Vehicle},
     repositories,
     state::AppState,
 };
@@ -30,20 +30,11 @@ pub async fn get_vehicle_service(state: &AppState, id: Uuid) -> Result<Vehicle, 
 /// - New vehicles are created with the "offline" status.
 pub async fn create_vehicle_service(
     state: &AppState,
-    request: CreateVehicleRequest,
+    request: VehicleRequest,
 ) -> Result<Vehicle, AppError> {
     info!("Validating create vehicle request.");
 
-    if request.vin.trim().is_empty() {
-        warn!("Rejected vehicle creation: VIN is empty.");
-        return Err(AppError::EmptyVin);
-    } else if request.model.trim().is_empty() {
-        warn!("Rejected vehicle creation: model is empty.");
-        return Err(AppError::EmptyModel);
-    } else if request.vin.len() != 17 {
-        warn!("Rejected vehicle creation: VIN has invalid length.");
-        return Err(AppError::InvalidVinLength);
-    }
+    validate_create_vehicle_request(&request)?;
 
     let result = repositories::create_vehicle(
         &state.db,
@@ -74,4 +65,27 @@ fn map_create_vehicle_error(error: sqlx::Error) -> AppError {
         }
         _ => AppError::Database,
     }
+}
+
+
+/// Validates the input required to create a vehicle.
+fn validate_create_vehicle_request(
+    request: &VehicleRequest,
+) -> Result<(), AppError> {
+    if request.vin.trim().is_empty() {
+        warn!("Rejected vehicle creation: VIN is empty.");
+        return Err(AppError::EmptyVin);
+    }
+
+    if request.model.trim().is_empty() {
+        warn!("Rejected vehicle creation: model is empty.");
+        return Err(AppError::EmptyModel);
+    }
+
+    if request.vin.len() != 17 {
+        warn!("Rejected vehicle creation: VIN has invalid length.");
+        return Err(AppError::InvalidVinLength);
+    }
+
+    Ok(())
 }
