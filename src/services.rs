@@ -89,9 +89,12 @@ fn validate_create_vehicle_request(request: &CreateVehicleRequest) -> Result<(),
 
 #[cfg(test)]
 mod tests {
+    use std::result;
+
     use super::*;
     use crate::models::CreateVehicleRequest;
 
+    // ---------- Validation Tests ----------
     #[test]
     fn validate_request_rejects_empty_vin() {
         let request = CreateVehicleRequest {
@@ -102,5 +105,37 @@ mod tests {
         let result = validate_create_vehicle_request(&request);
 
         assert!(matches!(result, Err(AppError::EmptyVin)));
+    }
+
+    #[test]
+    fn validate_request_rejects_empty_model() {
+        let request = CreateVehicleRequest {
+            vin: "5YJ3E1EA7KF317123".to_string(),
+            model: "".to_string(),
+        };
+        let result = validate_create_vehicle_request(&request);
+
+        assert!(matches!(result, Err(AppError::EmptyModel)));
+    }
+
+    #[test]
+    fn validate_request_rejects_invalid_vin_length() {
+        let request = CreateVehicleRequest {
+            vin: "5YJ3E1EA7KF31712".to_string(),
+            model: "Tesla Model 3".to_string(),
+        };
+        let result = validate_create_vehicle_request(&request);
+
+        assert!(matches!(result, Err(AppError::InvalidVinLength)));
+    }
+
+    #[test]
+    fn validate_request_accepts_valid_request() {
+        let request = CreateVehicleRequest {
+            vin: "5YJ3E1EA7KF317123".to_string(),
+            model: "Tesla Model 3".to_string(),
+        };
+        let result = validate_create_vehicle_request(&request);
+        assert!(result.is_ok());
     }
 }
