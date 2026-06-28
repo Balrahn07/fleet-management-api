@@ -103,7 +103,7 @@ Examples of Axum extractors:
 ```rust
 State(state): State<AppState>
 Path(id): Path<Uuid>
-Json(request): Json<VehicleRequest>
+Json(request): Json<CreateVehicleRequest>
 ```
 
 Meaning:
@@ -186,7 +186,7 @@ Current models:
 
 ```rust
 Vehicle
-VehicleRequest
+CreateVehicleRequest
 ```
 
 ### `Vehicle`
@@ -200,7 +200,7 @@ Contains backend-managed fields:
 * `created_at`
 * `updated_at`
 
-### `VehicleRequest`
+### `CreateVehicleRequest`
 
 Represents JSON sent by the client when creating a vehicle.
 
@@ -212,7 +212,7 @@ Contains only client-provided fields:
 Important concept:
 
 ```text
-Vehicle != VehicleRequest
+Vehicle != CreateVehicleRequest
 ```
 
 DTOs protect the backend from letting clients control fields like `id` or `status`.

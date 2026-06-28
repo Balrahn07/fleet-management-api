@@ -2,7 +2,7 @@ use crate::errors::AppError;
 use uuid::Uuid;
 
 use crate::{
-    models::{VehicleRequest, Vehicle},
+    models::{CreateVehicleRequest, Vehicle},
     repositories,
     state::AppState,
 };
@@ -30,7 +30,7 @@ pub async fn get_vehicle_service(state: &AppState, id: Uuid) -> Result<Vehicle, 
 /// - New vehicles are created with the "offline" status.
 pub async fn create_vehicle_service(
     state: &AppState,
-    request: VehicleRequest,
+    request: CreateVehicleRequest,
 ) -> Result<Vehicle, AppError> {
     info!("Validating create vehicle request.");
 
@@ -70,7 +70,7 @@ fn map_create_vehicle_error(error: sqlx::Error) -> AppError {
 
 /// Validates the input required to create a vehicle.
 fn validate_create_vehicle_request(
-    request: &VehicleRequest,
+    request: &CreateVehicleRequest,
 ) -> Result<(), AppError> {
     if request.vin.trim().is_empty() {
         warn!("Rejected vehicle creation: VIN is empty.");

@@ -1,6 +1,6 @@
 use crate::errors::AppError;
 use crate::{
-    models::{VehicleRequest, Vehicle},
+    models::{CreateVehicleRequest, Vehicle},
     services::{create_vehicle_service, get_vehicle_service, list_vehicles_service},
     state::AppState,
 };
@@ -33,7 +33,7 @@ pub async fn get_vehicle(
 
 pub async fn create_vehicle(
     State(state): State<AppState>,
-    Json(request): Json<VehicleRequest>,
+    Json(request): Json<CreateVehicleRequest>,
 ) -> Result<(StatusCode, Json<Vehicle>), AppError> {
     info!(
         vin = %request.vin,
