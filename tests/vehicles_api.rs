@@ -248,3 +248,27 @@ async fn get_vehicle_returns_created_vehicle() {
     assert_eq!(vehicle["model"], "Tesla Model 3");
     assert_eq!(vehicle["status"], "offline");
 }
+
+#[tokio::test]
+#[serial]
+async fn get_vehicle_returns_404_when_missing() {
+    let app = test_app().await;
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/vehicles/550e8400-e29b-41d4-a716-446655440000")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(body["error"], "Vehicle not found");
+}
