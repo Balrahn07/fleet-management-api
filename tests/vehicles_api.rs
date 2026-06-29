@@ -193,3 +193,58 @@ async fn list_vehicles_returns_created_vehicle() {
     assert_eq!(vehicles[0]["model"], "Tesla Model 3");
     assert_eq!(vehicles[0]["status"], "offline");
 }
+
+#[tokio::test]
+#[serial]
+async fn get_vehicle_returns_created_vehicle() {
+    let app = test_app().await;
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/vehicles")
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    r#"{"vin":"5YJ3E1EA7KF317126","model":"Tesla Model 3"}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(create_response.status(), StatusCode::CREATED);
+
+    let body = create_response
+        .into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes();
+
+    let created_vehicle: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    let id = created_vehicle["id"].as_str().unwrap();
+
+    let get_response = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/vehicles/{id}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(get_response.status(), StatusCode::OK);
+
+    let body = get_response.into_body().collect().await.unwrap().to_bytes();
+
+    let vehicle: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(vehicle["id"], id);
+    assert_eq!(vehicle["vin"], "5YJ3E1EA7KF317126");
+    assert_eq!(vehicle["model"], "Tesla Model 3");
+    assert_eq!(vehicle["status"], "offline");
+}
