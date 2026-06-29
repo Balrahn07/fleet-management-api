@@ -97,3 +97,44 @@ async fn create_vehicle_returns_created_vehicle() {
     assert!(body["created_at"].is_string());
     assert!(body["updated_at"].is_string());
 }
+
+#[tokio::test]
+async fn create_vehicle_rejects_duplicate_vin() {
+    let app = test_app().await;
+
+    let request_body = r#"{"vin":"5YJ3E1EA7KF317123","model":"Tesla Model 3"}"#;
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/vehicles")
+                .header("Content-Type", "application/json")
+                .body(Body::from(request_body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/vehicles")
+                .header("Content-Type", "application/json")
+                .body(Body::from(request_body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(body["error"], "A vehicle with this VIN already exists");
+}
