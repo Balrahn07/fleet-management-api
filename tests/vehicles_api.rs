@@ -65,3 +65,35 @@ async fn list_vehicles_returns_empty_list() {
 
     assert_eq!(&body[..], b"[]");
 }
+
+#[tokio::test]
+async fn create_vehicle_returns_created_vehicle() {
+    let app = test_app().await;
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/vehicles")
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    r#"{"vin":"5YJ3E1EA7KF317123","model":"Tesla Model 3"}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(body["vin"], "5YJ3E1EA7KF317123");
+    assert_eq!(body["model"], "Tesla Model 3");
+    assert_eq!(body["status"], "offline");
+
+    assert!(body["id"].is_string());
+    assert!(body["created_at"].is_string());
+    assert!(body["updated_at"].is_string());
+}
