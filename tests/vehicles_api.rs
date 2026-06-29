@@ -138,3 +138,51 @@ async fn create_vehicle_rejects_duplicate_vin() {
 
     assert_eq!(body["error"], "A vehicle with this VIN already exists");
 }
+
+#[tokio::test]
+async fn list_vehicles_returns_created_vehicle() {
+    let app = test_app().await;
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/vehicles")
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    r#"{"vin":"5YJ3E1EA7KF317123","model":"Tesla Model 3"}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(create_response.status(), StatusCode::CREATED);
+
+    let list_response = app
+        .oneshot(
+            Request::builder()
+                .uri("/vehicles")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(list_response.status(), StatusCode::OK);
+
+    let body = list_response
+        .into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes();
+
+    let vehicles: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(vehicles.as_array().unwrap().len(), 1);
+    assert_eq!(vehicles[0]["vin"], "5YJ3E1EA7KF317123");
+    assert_eq!(vehicles[0]["model"], "Tesla Model 3");
+    assert_eq!(vehicles[0]["status"], "offline");
+}
