@@ -7,6 +7,8 @@ use tower::ServiceExt;
 
 use fleet_management_api::{routes::create_routes, state::AppState};
 
+use serial_test::serial;
+
 /// Builds the Axum app using the dedicated test database.
 ///
 /// The test database comes from `.env.test`.
@@ -30,6 +32,7 @@ async fn test_app() -> axum::Router {
 }
 
 #[tokio::test]
+#[serial]
 async fn health_check_returns_ok() {
     let app = test_app().await;
 
@@ -46,6 +49,7 @@ async fn health_check_returns_ok() {
 }
 
 #[tokio::test]
+#[serial]
 async fn list_vehicles_returns_empty_list() {
     let app = test_app().await;
 
@@ -67,6 +71,7 @@ async fn list_vehicles_returns_empty_list() {
 }
 
 #[tokio::test]
+#[serial]
 async fn create_vehicle_returns_created_vehicle() {
     let app = test_app().await;
 
@@ -99,6 +104,7 @@ async fn create_vehicle_returns_created_vehicle() {
 }
 
 #[tokio::test]
+#[serial]
 async fn create_vehicle_rejects_duplicate_vin() {
     let app = test_app().await;
 
@@ -140,6 +146,7 @@ async fn create_vehicle_rejects_duplicate_vin() {
 }
 
 #[tokio::test]
+#[serial]
 async fn list_vehicles_returns_created_vehicle() {
     let app = test_app().await;
 
