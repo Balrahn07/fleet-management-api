@@ -102,7 +102,7 @@ async fn create_vehicle_returns_created_vehicle() {
 async fn create_vehicle_rejects_duplicate_vin() {
     let app = test_app().await;
 
-    let request_body = r#"{"vin":"5YJ3E1EA7KF317123","model":"Tesla Model 3"}"#;
+    let request_body = r#"{"vin":"5YJ3E1EA7KF317124","model":"Tesla Model 3"}"#;
 
     let response = app
         .clone()
@@ -151,7 +151,7 @@ async fn list_vehicles_returns_created_vehicle() {
                 .uri("/vehicles")
                 .header("Content-Type", "application/json")
                 .body(Body::from(
-                    r#"{"vin":"5YJ3E1EA7KF317123","model":"Tesla Model 3"}"#,
+                    r#"{"vin":"5YJ3E1EA7KF317125","model":"Tesla Model 3"}"#,
                 ))
                 .unwrap(),
         )
@@ -182,7 +182,7 @@ async fn list_vehicles_returns_created_vehicle() {
     let vehicles: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
     assert_eq!(vehicles.as_array().unwrap().len(), 1);
-    assert_eq!(vehicles[0]["vin"], "5YJ3E1EA7KF317123");
+    assert_eq!(vehicles[0]["vin"], "5YJ3E1EA7KF317125");
     assert_eq!(vehicles[0]["model"], "Tesla Model 3");
     assert_eq!(vehicles[0]["status"], "offline");
 }
