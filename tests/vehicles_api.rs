@@ -9,7 +9,7 @@ use fleet_management_api::{routes::create_routes, state::AppState};
 
 #[tokio::test]
 async fn health_check_returns_ok() {
-    dotenvy::dotenv().ok();
+    dotenvy::from_filename(".env.test").ok();
 
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
