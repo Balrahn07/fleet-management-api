@@ -44,3 +44,24 @@ async fn health_check_returns_ok() {
 
     assert_eq!(&body[..], b"OK");
 }
+
+#[tokio::test]
+async fn list_vehicles_returns_empty_list() {
+    let app = test_app().await;
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/vehicles")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+
+    assert_eq!(&body[..], b"[]");
+}
