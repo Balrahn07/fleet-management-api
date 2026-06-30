@@ -272,3 +272,81 @@ async fn get_vehicle_returns_404_when_missing() {
 
     assert_eq!(body["error"], "Vehicle not found");
 }
+
+#[tokio::test]
+#[serial]
+async fn delete_vehicle_deletes_existing_vehicle() {
+    let app = test_app().await;
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/vehicles")
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    r#"{"vin":"5YJ3E1EA7KF317127","model":"Tesla Model 3"}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(create_response.status(), StatusCode::CREATED);
+
+    let body = create_response
+        .into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes();
+    let created_vehicle: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    let id = created_vehicle["id"].as_str().unwrap();
+
+    let delete_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/vehicles/{id}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(delete_response.status(), StatusCode::NO_CONTENT);
+
+    let get_response = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/vehicles/{id}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(get_response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+#[serial]
+async fn delete_vehicle_returns_404_when_missing() {
+    let app = test_app().await;
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri("/vehicles/550e8400-e29b-41d4-a716-446655440000")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
