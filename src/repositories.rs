@@ -58,3 +58,21 @@ pub async fn create_vehicle(
 
     Ok(vehicle)
 }
+
+pub async fn update_vehicle(db: &PgPool, id: Uuid, status: String) -> Result<Vehicle, sqlx::Error> {
+    let vehicle = sqlx::query_as!(
+        Vehicle,
+        r#"
+        UPDATE vehicles
+        SET status = $1, updated_at = NOW()
+        WHERE id = $2
+        RETURNING id, vin, model, status, created_at, updated_at
+        "#,
+        status,
+        id
+    )
+    .fetch_one(db)
+    .await?;
+
+    Ok(vehicle)
+}

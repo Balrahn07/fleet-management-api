@@ -1,4 +1,4 @@
-use crate::errors::AppError;
+use crate::{errors::AppError, models::UpdateVehicleRequest};
 use uuid::Uuid;
 
 use crate::{
@@ -47,6 +47,24 @@ pub async fn create_vehicle_service(
 
     let vehicle = result.map_err(map_create_vehicle_error)?;
     Ok(vehicle)
+}
+
+pub async fn update_vehicle_service(
+    state: &AppState,
+    id: Uuid,
+    request: UpdateVehicleRequest,
+) -> Result<Vehicle, AppError> {
+    info!("Validating update vehicle request.");
+
+    if request.status.trim().is_empty() {
+        return Err(AppError::InvalidStatus);
+    }
+    repositories::update_vehicle(&state.db, id, request.status)
+        .await
+        .map_err(|error| match error {
+            sqlx::Error::RowNotFound => AppError::VehicleNotFound,
+            _ => AppError::Database,
+        })
 }
 
 /// Maps low-level SQLx errors into business-level application errors.

@@ -1,7 +1,10 @@
 use crate::errors::AppError;
+use crate::models::UpdateVehicleRequest;
 use crate::{
     models::{CreateVehicleRequest, Vehicle},
-    services::{create_vehicle_service, get_vehicle_service, list_vehicles_service},
+    services::{
+        create_vehicle_service, get_vehicle_service, list_vehicles_service, update_vehicle_service,
+    },
     state::AppState,
 };
 use axum::{
@@ -44,4 +47,20 @@ pub async fn create_vehicle(
     let vehicle = create_vehicle_service(&state, request).await?;
 
     Ok((StatusCode::CREATED, Json(vehicle)))
+}
+
+pub async fn update_vehicle(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    Json(request): Json<UpdateVehicleRequest>,
+) -> Result<Json<Vehicle>, AppError> {
+    info!(
+        id = %id,
+        status = %request.status,
+        "Updating vehicle"
+    );
+
+    let vehicle = update_vehicle_service(&state, id, request).await?;
+
+    Ok(Json(vehicle))
 }
