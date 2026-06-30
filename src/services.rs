@@ -67,6 +67,13 @@ pub async fn update_vehicle_service(
         })
 }
 
+pub async fn delete_vehicle_service(state: &AppState, id: Uuid) -> Result<(), AppError> {
+    match repositories::delete_vehicle(&state.db, id).await {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(AppError::VehicleNotFound),
+        Err(_) => Err(AppError::Database),
+    }
+}
 /// Maps low-level SQLx errors into business-level application errors.
 ///
 /// For example:

@@ -76,3 +76,17 @@ pub async fn update_vehicle(db: &PgPool, id: Uuid, status: String) -> Result<Veh
 
     Ok(vehicle)
 }
+
+pub async fn delete_vehicle(db: &PgPool, id: Uuid) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query!(
+        r#"
+        DELETE FROM vehicles
+        WHERE id = $1
+        "#,
+        id
+    )
+    .execute(db)
+    .await?;
+
+    Ok(result.rows_affected() == 1)
+}

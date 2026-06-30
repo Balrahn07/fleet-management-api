@@ -1,5 +1,6 @@
 use crate::errors::AppError;
 use crate::models::UpdateVehicleRequest;
+use crate::services::delete_vehicle_service;
 use crate::{
     models::{CreateVehicleRequest, Vehicle},
     services::{
@@ -63,4 +64,15 @@ pub async fn update_vehicle(
     let vehicle = update_vehicle_service(&state, id, request).await?;
 
     Ok(Json(vehicle))
+}
+
+pub async fn delete_vehicle(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, AppError> {
+    info!(id = %id, "Deleting vehicle");
+
+    delete_vehicle_service(&state, id).await?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
