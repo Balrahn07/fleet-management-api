@@ -5,7 +5,11 @@ use axum::{
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
-use fleet_management_api::{models::Vehicle, routes::create_routes, state::AppState};
+use fleet_management_api::{
+    models::{PaginatedResponse, Vehicle},
+    routes::create_routes,
+    state::AppState,
+};
 
 use serial_test::serial;
 
@@ -66,8 +70,12 @@ async fn list_vehicles_returns_empty_list() {
     assert_eq!(response.status(), StatusCode::OK);
 
     let body = response.into_body().collect().await.unwrap().to_bytes();
+    let vehicles: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
-    assert_eq!(&body[..], b"[]");
+    assert_eq!(vehicles["data"], serde_json::json!([]));
+    assert_eq!(vehicles["page"], 1);
+    assert_eq!(vehicles["limit"], 10);
+    assert_eq!(vehicles["total"], 0);
 }
 
 #[tokio::test]
@@ -188,10 +196,10 @@ async fn list_vehicles_returns_created_vehicle() {
 
     let vehicles: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
-    assert_eq!(vehicles.as_array().unwrap().len(), 1);
-    assert_eq!(vehicles[0]["vin"], "5YJ3E1EA7KF317125");
-    assert_eq!(vehicles[0]["model"], "Tesla Model 3");
-    assert_eq!(vehicles[0]["status"], "offline");
+    assert_eq!(vehicles["data"].as_array().unwrap().len(), 1);
+    assert_eq!(vehicles["data"][0]["vin"], "5YJ3E1EA7KF317125");
+    assert_eq!(vehicles["data"][0]["model"], "Tesla Model 3");
+    assert_eq!(vehicles["data"][0]["status"], "offline");
 }
 
 #[tokio::test]
@@ -392,9 +400,9 @@ async fn list_vehicles_supports_pagination() {
     assert_eq!(response.status(), StatusCode::OK);
 
     let body = response.into_body().collect().await.unwrap().to_bytes();
-    let vehicles: Vec<Vehicle> = serde_json::from_slice(&body).unwrap();
+    let vehicles: PaginatedResponse<Vehicle> = serde_json::from_slice(&body).unwrap();
 
-    assert_eq!(vehicles.len(), 2);
+    assert_eq!(vehicles.data.len(), 2);
 }
 
 #[tokio::test]

@@ -1,4 +1,7 @@
-use crate::{errors::AppError, models::UpdateVehicleRequest};
+use crate::{
+    errors::AppError,
+    models::{PaginatedResponse, UpdateVehicleRequest},
+};
 use uuid::Uuid;
 
 use crate::{
@@ -11,23 +14,29 @@ use tracing::{info, warn};
 pub async fn list_vehicles_service(
     state: &AppState,
     query: ListVehiclesQuery,
-) -> Result<Vec<Vehicle>, AppError> {
+) -> Result<PaginatedResponse<Vehicle>, AppError> {
     let page = query.page.unwrap_or(1);
     let limit = query.limit.unwrap_or(10);
 
-    if page < 1 {
-        return Err(AppError::InvalidPagination);
-    }
-
-    if limit < 1 || limit > 100 {
+    if page < 1 || limit < 1 || limit > 100 {
         return Err(AppError::InvalidPagination);
     }
 
     let offset = (page - 1) * limit;
 
-    repositories::list_vehicles(&state.db, limit, offset)
+    let vehicles = repositories::list_vehicles(&state.db, limit, offset)
         .await
-        .map_err(|_| AppError::Database)
+        .map_err(|_| AppError::Database)?;
+    let total = repositories::count_vehicles(&state.db)
+        .await
+        .map_err(|_| AppError::Database)?;
+
+    Ok(PaginatedResponse {
+        data: vehicles,
+        page,
+        limit,
+        total,
+    })
 }
 
 pub async fn get_vehicle_service(state: &AppState, id: Uuid) -> Result<Vehicle, AppError> {

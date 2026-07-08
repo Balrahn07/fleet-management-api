@@ -1,5 +1,5 @@
 use crate::errors::AppError;
-use crate::models::UpdateVehicleRequest;
+use crate::models::{PaginatedResponse, UpdateVehicleRequest};
 use crate::services::delete_vehicle_service;
 use crate::{
     models::{CreateVehicleRequest, ListVehiclesQuery, Vehicle},
@@ -23,10 +23,10 @@ pub async fn health_check() -> &'static str {
 pub async fn list_vehicles(
     State(state): State<AppState>,
     Query(query): Query<ListVehiclesQuery>,
-) -> Result<Json<Vec<Vehicle>>, AppError> {
-    let vehicles = list_vehicles_service(&state, query).await?;
+) -> Result<Json<PaginatedResponse<Vehicle>>, AppError> {
+    let response = list_vehicles_service(&state, query).await?;
 
-    Ok(Json(vehicles))
+    Ok(Json(response))
 }
 
 pub async fn get_vehicle(

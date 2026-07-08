@@ -97,3 +97,16 @@ pub async fn delete_vehicle(db: &PgPool, id: Uuid) -> Result<bool, sqlx::Error> 
 
     Ok(result.rows_affected() == 1)
 }
+
+pub async fn count_vehicles(db: &PgPool) -> Result<i64, sqlx::Error> {
+    let result = sqlx::query!(
+        r#"
+        SELECT COUNT(*) as count
+        FROM vehicles
+        "#
+    )
+    .fetch_one(db)
+    .await?;
+
+    Ok(result.count.unwrap_or(0))
+}

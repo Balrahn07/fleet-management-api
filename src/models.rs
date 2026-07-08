@@ -18,13 +18,21 @@ pub struct CreateVehicleRequest {
     pub model: String,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Deserialize)]
 pub struct UpdateVehicleRequest {
     pub status: String,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct ListVehiclesQuery {
     pub page: Option<i64>,
     pub limit: Option<i64>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PaginatedResponse<T> {
+    pub data: Vec<T>,
+    pub page: i64,
+    pub limit: i64,
+    pub total: i64,
 }
