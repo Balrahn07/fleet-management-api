@@ -73,9 +73,9 @@ async fn list_vehicles_returns_empty_list() {
     let vehicles: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
     assert_eq!(vehicles["data"], serde_json::json!([]));
-    assert_eq!(vehicles["page"], 1);
-    assert_eq!(vehicles["limit"], 10);
-    assert_eq!(vehicles["total"], 0);
+    assert_eq!(vehicles["pagination"]["page"], 1);
+    assert_eq!(vehicles["pagination"]["limit"], 10);
+    assert_eq!(vehicles["pagination"]["total_items"], 0);
 }
 
 #[tokio::test]

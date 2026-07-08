@@ -24,10 +24,16 @@ pub async fn list_vehicles_service(
 
     let offset = (page - 1) * limit;
 
-    let vehicles = repositories::list_vehicles(&state.db, limit, offset)
+    if let Some(status) = &query.status {
+        validate_status(status)?;
+    }
+
+    let status = query.status.as_deref();
+
+    let vehicles = repositories::list_vehicles(&state.db, limit, offset, status)
         .await
         .map_err(|_| AppError::Database)?;
-    let total = repositories::count_vehicles(&state.db)
+    let total = repositories::count_vehicles(&state.db, status)
         .await
         .map_err(|_| AppError::Database)?;
 
@@ -90,9 +96,8 @@ pub async fn update_vehicle_service(
 ) -> Result<Vehicle, AppError> {
     info!("Validating update vehicle request.");
 
-    if request.status.trim().is_empty() {
-        return Err(AppError::InvalidStatus);
-    }
+    validate_status(&request.status)?;
+
     repositories::update_vehicle(&state.db, id, request.status)
         .await
         .map_err(|error| match error {
@@ -143,6 +148,15 @@ fn validate_create_vehicle_request(request: &CreateVehicleRequest) -> Result<(),
         return Err(AppError::InvalidVinLength);
     }
 
+    Ok(())
+}
+
+fn validate_status(status: &str) -> Result<(), AppError> {
+    let valid_statuses = ["online", "offline", "maintenance"];
+    if !valid_statuses.contains(&status) {
+        warn!("Rejected vehicle update: invalid status '{}'.", status);
+        return Err(AppError::InvalidStatus);
+    }
     Ok(())
 }
 

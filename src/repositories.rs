@@ -7,17 +7,20 @@ pub async fn list_vehicles(
     db: &PgPool,
     limit: i64,
     offset: i64,
+    status: Option<&str>,
 ) -> Result<Vec<Vehicle>, sqlx::Error> {
     let vehicles = sqlx::query_as!(
         Vehicle,
         r#"
         SELECT id, vin, model, status, created_at, updated_at
         FROM vehicles
+        WHERE ($3::text IS NULL OR status = $3)
         ORDER BY created_at DESC
         LIMIT $1 OFFSET $2
         "#,
         limit,
-        offset
+        offset,
+        status
     )
     .fetch_all(db)
     .await?;
@@ -98,12 +101,14 @@ pub async fn delete_vehicle(db: &PgPool, id: Uuid) -> Result<bool, sqlx::Error> 
     Ok(result.rows_affected() == 1)
 }
 
-pub async fn count_vehicles(db: &PgPool) -> Result<i64, sqlx::Error> {
+pub async fn count_vehicles(db: &PgPool, status: Option<&str>) -> Result<i64, sqlx::Error> {
     let result = sqlx::query!(
         r#"
         SELECT COUNT(*) as count
         FROM vehicles
-        "#
+        WHERE ($1::text IS NULL OR status = $1)
+        "#,
+        status
     )
     .fetch_one(db)
     .await?;

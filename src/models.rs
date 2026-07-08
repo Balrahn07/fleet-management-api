@@ -27,6 +27,7 @@ pub struct UpdateVehicleRequest {
 pub struct ListVehiclesQuery {
     pub page: Option<i64>,
     pub limit: Option<i64>,
+    pub status: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
