@@ -1,6 +1,6 @@
 use crate::{
     errors::AppError,
-    models::{PaginatedResponse, UpdateVehicleRequest},
+    models::{PaginatedResponse, Pagination, UpdateVehicleRequest},
 };
 use uuid::Uuid;
 
@@ -31,12 +31,21 @@ pub async fn list_vehicles_service(
         .await
         .map_err(|_| AppError::Database)?;
 
-    Ok(PaginatedResponse {
+    let total_pages = (total + limit - 1) / limit;
+
+    let response = PaginatedResponse {
         data: vehicles,
-        page,
-        limit,
-        total,
-    })
+        pagination: Pagination {
+            page,
+            limit,
+            total_items: total,
+            total_pages,
+            has_next: page < total_pages,
+            has_previous: page > 1,
+        },
+    };
+
+    Ok(response)
 }
 
 pub async fn get_vehicle_service(state: &AppState, id: Uuid) -> Result<Vehicle, AppError> {

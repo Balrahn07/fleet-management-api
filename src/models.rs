@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Vehicle {
     pub id: Uuid,
     pub vin: String,
@@ -29,10 +29,18 @@ pub struct ListVehiclesQuery {
     pub limit: Option<i64>,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct PaginatedResponse<T> {
-    pub data: Vec<T>,
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Pagination {
     pub page: i64,
     pub limit: i64,
-    pub total: i64,
+    pub total_items: i64,
+    pub total_pages: i64,
+    pub has_next: bool,
+    pub has_previous: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PaginatedResponse<T> {
+    pub data: Vec<T>,
+    pub pagination: Pagination,
 }
