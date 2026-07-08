@@ -2,7 +2,7 @@ use crate::errors::AppError;
 use crate::models::UpdateVehicleRequest;
 use crate::services::delete_vehicle_service;
 use crate::{
-    models::{CreateVehicleRequest, Vehicle},
+    models::{CreateVehicleRequest, ListVehiclesQuery, Vehicle},
     services::{
         create_vehicle_service, get_vehicle_service, list_vehicles_service, update_vehicle_service,
     },
@@ -10,7 +10,7 @@ use crate::{
 };
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
 use tracing::info;
@@ -20,8 +20,11 @@ pub async fn health_check() -> &'static str {
     "OK"
 }
 
-pub async fn list_vehicles(State(state): State<AppState>) -> Result<Json<Vec<Vehicle>>, AppError> {
-    let vehicles = list_vehicles_service(&state).await?;
+pub async fn list_vehicles(
+    State(state): State<AppState>,
+    Query(query): Query<ListVehiclesQuery>,
+) -> Result<Json<Vec<Vehicle>>, AppError> {
+    let vehicles = list_vehicles_service(&state, query).await?;
 
     Ok(Json(vehicles))
 }

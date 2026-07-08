@@ -3,14 +3,21 @@ use uuid::Uuid;
 
 use crate::models::Vehicle;
 
-pub async fn list_vehicles(db: &PgPool) -> Result<Vec<Vehicle>, sqlx::Error> {
+pub async fn list_vehicles(
+    db: &PgPool,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<Vehicle>, sqlx::Error> {
     let vehicles = sqlx::query_as!(
         Vehicle,
         r#"
         SELECT id, vin, model, status, created_at, updated_at
         FROM vehicles
         ORDER BY created_at DESC
-        "#
+        LIMIT $1 OFFSET $2
+        "#,
+        limit,
+        offset
     )
     .fetch_all(db)
     .await?;

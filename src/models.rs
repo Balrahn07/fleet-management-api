@@ -22,3 +22,9 @@ pub struct CreateVehicleRequest {
 pub struct UpdateVehicleRequest {
     pub status: String,
 }
+
+#[derive(Debug, serde::Deserialize)]
+pub struct ListVehiclesQuery {
+    pub page: Option<i64>,
+    pub limit: Option<i64>,
+}

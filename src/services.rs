@@ -2,14 +2,21 @@ use crate::{errors::AppError, models::UpdateVehicleRequest};
 use uuid::Uuid;
 
 use crate::{
-    models::{CreateVehicleRequest, Vehicle},
+    models::{CreateVehicleRequest, ListVehiclesQuery, Vehicle},
     repositories,
     state::AppState,
 };
 use tracing::{info, warn};
 
-pub async fn list_vehicles_service(state: &AppState) -> Result<Vec<Vehicle>, AppError> {
-    repositories::list_vehicles(&state.db)
+pub async fn list_vehicles_service(
+    state: &AppState,
+    query: ListVehiclesQuery,
+) -> Result<Vec<Vehicle>, AppError> {
+    let page = query.page.unwrap_or(1);
+    let limit = query.limit.unwrap_or(10);
+    let offset = (page - 1) * limit;
+
+    repositories::list_vehicles(&state.db, limit, offset)
         .await
         .map_err(|_| AppError::Database)
 }
