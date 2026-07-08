@@ -14,6 +14,15 @@ pub async fn list_vehicles_service(
 ) -> Result<Vec<Vehicle>, AppError> {
     let page = query.page.unwrap_or(1);
     let limit = query.limit.unwrap_or(10);
+
+    if page < 1 {
+        return Err(AppError::InvalidPagination);
+    }
+
+    if limit < 1 || limit > 100 {
+        return Err(AppError::InvalidPagination);
+    }
+
     let offset = (page - 1) * limit;
 
     repositories::list_vehicles(&state.db, limit, offset)

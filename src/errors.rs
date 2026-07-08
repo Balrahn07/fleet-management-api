@@ -16,6 +16,7 @@ pub enum AppError {
     InvalidVinLength,
     InvalidStatus,
     VehicleNotFound,
+    InvalidPagination,
     DuplicateVin,
     Database,
 }
@@ -27,6 +28,7 @@ impl AppError {
             AppError::EmptyModel => StatusCode::BAD_REQUEST,
             AppError::InvalidVinLength => StatusCode::BAD_REQUEST,
             AppError::InvalidStatus => StatusCode::BAD_REQUEST,
+            AppError::InvalidPagination => StatusCode::BAD_REQUEST,
             AppError::VehicleNotFound => StatusCode::NOT_FOUND,
             AppError::DuplicateVin => StatusCode::CONFLICT,
             AppError::Database => StatusCode::INTERNAL_SERVER_ERROR,
@@ -42,6 +44,7 @@ impl AppError {
             AppError::VehicleNotFound => "Vehicle not found".to_string(),
             AppError::DuplicateVin => "A vehicle with this VIN already exists".to_string(),
             AppError::Database => "Internal server error".to_string(),
+            AppError::InvalidPagination => "Invalid pagination parameters".to_string(),
         }
     }
 }
