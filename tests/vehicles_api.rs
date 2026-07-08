@@ -5,7 +5,7 @@ use axum::{
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
-use fleet_management_api::{routes::create_routes, state::AppState};
+use fleet_management_api::{models::Vehicle, routes::create_routes, state::AppState};
 
 use serial_test::serial;
 
@@ -349,4 +349,93 @@ async fn delete_vehicle_returns_404_when_missing() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+#[serial]
+async fn list_vehicles_supports_pagination() {
+    let app = test_app().await;
+
+    for i in 0..3 {
+        let request_body = format!(
+            r#"{{"vin":"5YJ3E1EA7KF31712{}","model":"Tesla Model 3"}}"#,
+            i
+        );
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/vehicles")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(request_body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/vehicles?page=1&limit=2")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let vehicles: Vec<Vehicle> = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(vehicles.len(), 2);
+}
+
+#[tokio::test]
+#[serial]
+async fn list_vehicles_rejects_invalid_page() {
+    let app = test_app().await;
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/vehicles?page=0&limit=10")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(body["error"], "Invalid pagination parameters");
+}
+
+#[tokio::test]
+#[serial]
+async fn list_vehicles_rejects_invalid_limit() {
+    let app = test_app().await;
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/vehicles?page=1&limit=500")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
