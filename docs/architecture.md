@@ -431,17 +431,43 @@ Backend generates:
 
 ---
 
+### Update vehicle status
+
+```http
+PUT /vehicles/{id}
+```
+
+Request body:
+
+```json
+{
+  "status": "maintenance"
+}
+```
+Returns:
+
+- 200 OK with updated vehicle JSON if found
+- 400 Bad Request if status is invalid
+- 404 Not Found if missing
+
+### Delete vehicle
+
+```http
+DELETE /vehicles/{id}
+```
+
+Returns:
+
+- 204 No Content if deleted
+- 404 Not Found if missing
+
 ## Next Steps
 
 Planned improvements:
 
-1. Improve error handling with custom `AppError`
-2. Handle duplicate VIN properly with `409 Conflict`
-3. Add `PUT /vehicles/{id}`
-4. Add `DELETE /vehicles/{id}`
-5. Add validation layer
-6. Add tests
-7. Add Docker Compose
-8. Add authentication
-9. Add Redis caching
-10. Add Kafka/event-driven telemetry later
+1. Add validation layer
+2. Add tests
+3. Add Docker Compose
+4. Add authentication
+5. Add Redis caching
+6. Add Kafka/event-driven telemetry later
