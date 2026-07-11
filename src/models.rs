@@ -8,6 +8,7 @@ pub struct Vehicle {
     pub vin: String,
     pub model: String,
     pub status: String,
+    pub driver_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -66,4 +67,16 @@ pub enum VehicleSortField {
 pub enum SortOrder {
     Asc,
     Desc,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, sqlx::FromRow)]
+pub struct Driver {
+    pub id: Uuid,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AssignDriverRequest {
+    pub driver_id: Uuid,
 }

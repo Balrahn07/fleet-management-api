@@ -21,6 +21,9 @@ pub enum AppError {
     Database,
     InvalidSortField,
     InvalidSortOrder,
+    DriverNotFound,
+    VehicleAlreadyAssigned,
+    DriverAlreadyAssigned,
 }
 
 impl AppError {
@@ -36,6 +39,9 @@ impl AppError {
             AppError::Database => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::InvalidSortField => StatusCode::BAD_REQUEST,
             AppError::InvalidSortOrder => StatusCode::BAD_REQUEST,
+            AppError::DriverNotFound => StatusCode::NOT_FOUND,
+            AppError::VehicleAlreadyAssigned => StatusCode::CONFLICT,
+            AppError::DriverAlreadyAssigned => StatusCode::CONFLICT,
         }
     }
 
@@ -51,6 +57,13 @@ impl AppError {
             AppError::InvalidPagination => "Invalid pagination parameters".to_string(),
             AppError::InvalidSortField => "Invalid sort field".to_string(),
             AppError::InvalidSortOrder => "Invalid sort order".to_string(),
+            AppError::DriverNotFound => "Driver not found".to_string(),
+            AppError::VehicleAlreadyAssigned => {
+                "Vehicle is already assigned to a driver".to_string()
+            }
+            AppError::DriverAlreadyAssigned => {
+                "Driver is already assigned to another vehicle".to_string()
+            }
         }
     }
 }

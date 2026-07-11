@@ -1,4 +1,4 @@
-use sqlx::{PgPool, Postgres, QueryBuilder};
+use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
 use uuid::Uuid;
 
 use crate::models::{SortOrder, Vehicle, VehicleFilter, VehicleSortField};
@@ -11,7 +11,7 @@ pub async fn list_vehicles(
 ) -> Result<Vec<Vehicle>, sqlx::Error> {
     let mut query = QueryBuilder::<Postgres>::new(
         r#"
-        SELECT id, vin, model, status, created_at, updated_at
+        SELECT id, vin, model, status, driver_id, created_at, updated_at
         FROM vehicles
         "#,
     );
@@ -49,7 +49,7 @@ pub async fn get_vehicle(db: &PgPool, id: Uuid) -> Result<Option<Vehicle>, sqlx:
     let vehicle = sqlx::query_as!(
         Vehicle,
         r#"
-        SELECT id, vin, model, status, created_at, updated_at
+        SELECT id, vin, model, status, driver_id, created_at, updated_at
         FROM vehicles
         WHERE id = $1
         "#,
@@ -73,7 +73,7 @@ pub async fn create_vehicle(
         r#"
         INSERT INTO vehicles (id, vin, model, status)
         VALUES ($1, $2, $3, $4)
-        RETURNING id, vin, model, status, created_at, updated_at
+        RETURNING id, vin, model, status, driver_id, created_at, updated_at
         "#,
         id,
         vin,
@@ -93,7 +93,7 @@ pub async fn update_vehicle(db: &PgPool, id: Uuid, status: String) -> Result<Veh
         UPDATE vehicles
         SET status = $1, updated_at = NOW()
         WHERE id = $2
-        RETURNING id, vin, model, status, created_at, updated_at
+        RETURNING id, vin, model, status, driver_id, created_at, updated_at
         "#,
         status,
         id
@@ -131,4 +131,95 @@ pub async fn count_vehicles(db: &PgPool, filter: &VehicleFilter) -> Result<i64, 
     .await?;
 
     Ok(result.count.unwrap_or(0))
+}
+
+pub async fn find_vehicle_driver_for_update(
+    tx: &mut Transaction<'_, Postgres>,
+    vehicle_id: Uuid,
+) -> Result<Option<Option<Uuid>>, sqlx::Error> {
+    let result = sqlx::query_scalar!(
+        r#"
+        SELECT driver_id
+        FROM vehicles
+        WHERE id = $1
+        FOR UPDATE
+        "#,
+        vehicle_id
+    )
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    Ok(result)
+}
+
+pub async fn driver_exists(
+    tx: &mut Transaction<'_, Postgres>,
+    driver_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    let exists = sqlx::query_scalar!(
+        r#"
+        SELECT EXISTS(
+            SELECT 1
+            FROM drivers
+            WHERE id = $1
+        )
+        "#,
+        driver_id
+    )
+    .fetch_one(&mut **tx)
+    .await?
+    .unwrap_or(false);
+
+    Ok(exists)
+}
+
+pub async fn is_driver_assigned(
+    tx: &mut Transaction<'_, Postgres>,
+    driver_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    let exists = sqlx::query_scalar!(
+        r#"
+        SELECT EXISTS(
+            SELECT 1
+            FROM vehicles
+            WHERE driver_id = $1
+        )
+        "#,
+        driver_id
+    )
+    .fetch_one(&mut **tx)
+    .await?
+    .unwrap_or(false);
+
+    Ok(exists)
+}
+
+pub async fn assign_driver_to_vehicle(
+    tx: &mut Transaction<'_, Postgres>,
+    vehicle_id: Uuid,
+    driver_id: Uuid,
+) -> Result<Vehicle, sqlx::Error> {
+    let vehicle = sqlx::query_as!(
+        Vehicle,
+        r#"
+        UPDATE vehicles
+        SET driver_id = $1,
+            updated_at = NOW()
+        WHERE id = $2
+        RETURNING
+            id,
+            vin,
+            model,
+            status,
+            driver_id,
+            created_at,
+            updated_at
+        "#,
+        driver_id,
+        vehicle_id
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(vehicle)
 }

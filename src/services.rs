@@ -133,6 +133,49 @@ pub async fn delete_vehicle_service(state: &AppState, id: Uuid) -> Result<(), Ap
         Err(_) => Err(AppError::Database),
     }
 }
+
+pub async fn assign_driver_service(
+    state: &AppState,
+    vehicle_id: Uuid,
+    driver_id: Uuid,
+) -> Result<Vehicle, AppError> {
+    let mut tx = state.db.begin().await.map_err(|_| AppError::Database)?;
+
+    let current_driver = repositories::find_vehicle_driver_for_update(&mut tx, vehicle_id)
+        .await
+        .map_err(|_| AppError::Database)?;
+
+    let current_driver = current_driver.ok_or(AppError::VehicleNotFound)?;
+
+    if current_driver.is_some() {
+        return Err(AppError::VehicleAlreadyAssigned);
+    }
+
+    let driver_exists = repositories::driver_exists(&mut tx, driver_id)
+        .await
+        .map_err(|_| AppError::Database)?;
+
+    if !driver_exists {
+        return Err(AppError::DriverNotFound);
+    }
+
+    let driver_is_assigned = repositories::is_driver_assigned(&mut tx, driver_id)
+        .await
+        .map_err(|_| AppError::Database)?;
+
+    if driver_is_assigned {
+        return Err(AppError::DriverAlreadyAssigned);
+    }
+
+    let vehicle = repositories::assign_driver_to_vehicle(&mut tx, vehicle_id, driver_id)
+        .await
+        .map_err(|_| AppError::Database)?;
+
+    tx.commit().await.map_err(|_| AppError::Database)?;
+
+    Ok(vehicle)
+}
+
 /// Maps low-level SQLx errors into business-level application errors.
 ///
 /// For example:
