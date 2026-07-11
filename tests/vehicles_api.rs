@@ -524,11 +524,7 @@ async fn list_vehicles_filters_by_status() {
     assert_eq!(body.data.len(), 2);
     assert_eq!(body.pagination.total_items, 2);
 
-    assert!(
-        body.data
-            .iter()
-            .all(|vehicle| vehicle.status == "online")
-    );
+    assert!(body.data.iter().all(|vehicle| vehicle.status == "online"));
 }
 
 #[tokio::test]

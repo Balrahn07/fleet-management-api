@@ -1,6 +1,9 @@
 use crate::{
     errors::AppError,
-    models::{PaginatedResponse, Pagination, UpdateVehicleRequest, VehicleFilter},
+    models::{
+        PaginatedResponse, Pagination, SortOrder, UpdateVehicleRequest, VehicleFilter,
+        VehicleSortField,
+    },
 };
 use uuid::Uuid;
 
@@ -18,7 +21,7 @@ pub async fn list_vehicles_service(
     let page = query.page.unwrap_or(1);
     let limit = query.limit.unwrap_or(10);
 
-    if page < 1 || limit < 1 || limit > 100 {
+    if page < 1 || !(1..=100).contains(&limit) {
         return Err(AppError::InvalidPagination);
     }
 
@@ -26,8 +29,23 @@ pub async fn list_vehicles_service(
         validate_status(status)?;
     }
 
+    let sort_field = match query.sort_by.as_deref().unwrap_or("created_at") {
+        "created_at" => VehicleSortField::CreatedAt,
+        "model" => VehicleSortField::Model,
+        "status" => VehicleSortField::Status,
+        _ => return Err(AppError::InvalidSortField),
+    };
+
+    let sort_order = match query.order.as_deref().unwrap_or("desc") {
+        "asc" => SortOrder::Asc,
+        "desc" => SortOrder::Desc,
+        _ => return Err(AppError::InvalidSortOrder),
+    };
+
     let filter = VehicleFilter {
         status: query.status,
+        sort_field,
+        sort_order,
     };
 
     let offset = (page - 1) * limit;

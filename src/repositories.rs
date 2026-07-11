@@ -1,7 +1,7 @@
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
-use crate::models::{Vehicle, VehicleFilter};
+use crate::models::{SortOrder, Vehicle, VehicleFilter, VehicleSortField};
 
 pub async fn list_vehicles(
     db: &PgPool,
@@ -9,21 +9,38 @@ pub async fn list_vehicles(
     offset: i64,
     filter: &VehicleFilter,
 ) -> Result<Vec<Vehicle>, sqlx::Error> {
-    let vehicles = sqlx::query_as!(
-        Vehicle,
+    let mut query = QueryBuilder::<Postgres>::new(
         r#"
         SELECT id, vin, model, status, created_at, updated_at
         FROM vehicles
-        WHERE ($3::text IS NULL OR status = $3)
-        ORDER BY created_at DESC
-        LIMIT $1 OFFSET $2
         "#,
-        limit,
-        offset,
-        filter.status.as_deref()
-    )
-    .fetch_all(db)
-    .await?;
+    );
+
+    if let Some(status) = filter.status.as_deref() {
+        query.push(" WHERE status = ");
+        query.push_bind(status);
+    }
+
+    query.push(" ORDER BY ");
+
+    match filter.sort_field {
+        VehicleSortField::CreatedAt => query.push("created_at"),
+        VehicleSortField::Model => query.push("model"),
+        VehicleSortField::Status => query.push("status"),
+    };
+
+    match filter.sort_order {
+        SortOrder::Asc => query.push(" ASC"),
+        SortOrder::Desc => query.push(" DESC"),
+    };
+
+    query.push(" LIMIT ");
+    query.push_bind(limit);
+
+    query.push(" OFFSET ");
+    query.push_bind(offset);
+
+    let vehicles = query.build_query_as::<Vehicle>().fetch_all(db).await?;
 
     Ok(vehicles)
 }

@@ -19,6 +19,8 @@ pub enum AppError {
     InvalidPagination,
     DuplicateVin,
     Database,
+    InvalidSortField,
+    InvalidSortOrder,
 }
 
 impl AppError {
@@ -32,6 +34,8 @@ impl AppError {
             AppError::VehicleNotFound => StatusCode::NOT_FOUND,
             AppError::DuplicateVin => StatusCode::CONFLICT,
             AppError::Database => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::InvalidSortField => StatusCode::BAD_REQUEST,
+            AppError::InvalidSortOrder => StatusCode::BAD_REQUEST,
         }
     }
 
@@ -45,6 +49,8 @@ impl AppError {
             AppError::DuplicateVin => "A vehicle with this VIN already exists".to_string(),
             AppError::Database => "Internal server error".to_string(),
             AppError::InvalidPagination => "Invalid pagination parameters".to_string(),
+            AppError::InvalidSortField => "Invalid sort field".to_string(),
+            AppError::InvalidSortOrder => "Invalid sort order".to_string(),
         }
     }
 }

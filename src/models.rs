@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, sqlx::FromRow)]
 pub struct Vehicle {
     pub id: Uuid,
     pub vin: String,
@@ -28,6 +28,8 @@ pub struct ListVehiclesQuery {
     pub page: Option<i64>,
     pub limit: Option<i64>,
     pub status: Option<String>,
+    pub sort_by: Option<String>,
+    pub order: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -49,4 +51,19 @@ pub struct PaginatedResponse<T> {
 #[derive(Debug)]
 pub struct VehicleFilter {
     pub status: Option<String>,
+    pub sort_field: VehicleSortField,
+    pub sort_order: SortOrder,
+}
+
+#[derive(Debug)]
+pub enum VehicleSortField {
+    CreatedAt,
+    Model,
+    Status,
+}
+
+#[derive(Debug)]
+pub enum SortOrder {
+    Asc,
+    Desc,
 }
