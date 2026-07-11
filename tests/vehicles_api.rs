@@ -447,3 +447,110 @@ async fn list_vehicles_rejects_invalid_limit() {
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
+
+#[tokio::test]
+#[serial]
+async fn list_vehicles_filters_by_status() {
+    let app = test_app().await;
+
+    let vehicles = [
+        (
+            r#"{"vin":"5YJ3E1EA7KF317124","model":"Tesla Model 3"}"#,
+            "online",
+        ),
+        (
+            r#"{"vin":"VF1AAAAAA12345678","model":"Renault Megane"}"#,
+            "offline",
+        ),
+        (
+            r#"{"vin":"WVWZZZ1JZXW000001","model":"Volkswagen Golf"}"#,
+            "online",
+        ),
+    ];
+
+    for (request_body, status) in vehicles {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/vehicles")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(request_body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let vehicle: Vehicle = serde_json::from_slice(&body).unwrap();
+
+        let update_body = format!(r#"{{"status":"{status}"}}"#);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri(format!("/vehicles/{}", vehicle.id))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(update_body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/vehicles?status=online")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body: PaginatedResponse<Vehicle> = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(body.data.len(), 2);
+    assert_eq!(body.pagination.total_items, 2);
+
+    assert!(
+        body.data
+            .iter()
+            .all(|vehicle| vehicle.status == "online")
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn list_vehicles_rejects_invalid_status_filter() {
+    let app = test_app().await;
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/vehicles?status=flying")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(body["error"], "Invalid status");
+}
