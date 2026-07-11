@@ -30,8 +30,8 @@ pub async fn list_vehicles(
     };
 
     match filter.sort_order {
-        SortOrder::Asc => query.push(" ASC"),
-        SortOrder::Desc => query.push(" DESC"),
+        SortOrder::Asc => query.push(" ASC, id ASC"),
+        SortOrder::Desc => query.push(" DESC, id DESC"),
     };
 
     query.push(" LIMIT ");
