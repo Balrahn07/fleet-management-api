@@ -45,3 +45,8 @@ pub struct PaginatedResponse<T> {
     pub data: Vec<T>,
     pub pagination: Pagination,
 }
+
+#[derive(Debug)]
+pub struct VehicleFilter {
+    pub status: Option<String>,
+}

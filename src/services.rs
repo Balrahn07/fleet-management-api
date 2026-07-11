@@ -1,6 +1,6 @@
 use crate::{
     errors::AppError,
-    models::{PaginatedResponse, Pagination, UpdateVehicleRequest},
+    models::{PaginatedResponse, Pagination, UpdateVehicleRequest, VehicleFilter},
 };
 use uuid::Uuid;
 
@@ -22,18 +22,20 @@ pub async fn list_vehicles_service(
         return Err(AppError::InvalidPagination);
     }
 
-    let offset = (page - 1) * limit;
-
     if let Some(status) = &query.status {
         validate_status(status)?;
     }
 
-    let status = query.status.as_deref();
+    let filter = VehicleFilter {
+        status: query.status,
+    };
 
-    let vehicles = repositories::list_vehicles(&state.db, limit, offset, status)
+    let offset = (page - 1) * limit;
+
+    let vehicles = repositories::list_vehicles(&state.db, limit, offset, &filter)
         .await
         .map_err(|_| AppError::Database)?;
-    let total = repositories::count_vehicles(&state.db, status)
+    let total = repositories::count_vehicles(&state.db, &filter)
         .await
         .map_err(|_| AppError::Database)?;
 

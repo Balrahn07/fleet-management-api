@@ -1,13 +1,13 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::models::Vehicle;
+use crate::models::{Vehicle, VehicleFilter};
 
 pub async fn list_vehicles(
     db: &PgPool,
     limit: i64,
     offset: i64,
-    status: Option<&str>,
+    filter: &VehicleFilter,
 ) -> Result<Vec<Vehicle>, sqlx::Error> {
     let vehicles = sqlx::query_as!(
         Vehicle,
@@ -20,7 +20,7 @@ pub async fn list_vehicles(
         "#,
         limit,
         offset,
-        status
+        filter.status.as_deref()
     )
     .fetch_all(db)
     .await?;
@@ -101,14 +101,14 @@ pub async fn delete_vehicle(db: &PgPool, id: Uuid) -> Result<bool, sqlx::Error> 
     Ok(result.rows_affected() == 1)
 }
 
-pub async fn count_vehicles(db: &PgPool, status: Option<&str>) -> Result<i64, sqlx::Error> {
+pub async fn count_vehicles(db: &PgPool, filter: &VehicleFilter) -> Result<i64, sqlx::Error> {
     let result = sqlx::query!(
         r#"
         SELECT COUNT(*) as count
         FROM vehicles
         WHERE ($1::text IS NULL OR status = $1)
         "#,
-        status
+        filter.status.as_deref()
     )
     .fetch_one(db)
     .await?;
