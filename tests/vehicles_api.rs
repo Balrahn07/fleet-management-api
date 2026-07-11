@@ -550,3 +550,105 @@ async fn list_vehicles_rejects_invalid_status_filter() {
 
     assert_eq!(body["error"], "Invalid status");
 }
+
+#[tokio::test]
+#[serial]
+async fn list_vehicles_sorts_by_model_ascending() {
+    let app = test_app().await;
+
+    let vehicles = [
+        r#"{"vin":"5YJ3E1EA7KF317124","model":"Tesla Model 3"}"#,
+        r#"{"vin":"VF1AAAAAA12345678","model":"Renault Megane"}"#,
+        r#"{"vin":"WVWZZZ1JZXW000001","model":"Audi A3"}"#,
+    ];
+
+    for request_body in vehicles {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/vehicles")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(request_body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/vehicles?sort_by=model&order=asc")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+
+    let response: PaginatedResponse<Vehicle> = serde_json::from_slice(&body).unwrap();
+
+    let models: Vec<&str> = response
+        .data
+        .iter()
+        .map(|vehicle| vehicle.model.as_str())
+        .collect();
+
+    assert_eq!(models, vec!["Audi A3", "Renault Megane", "Tesla Model 3"]);
+}
+
+#[tokio::test]
+#[serial]
+async fn list_vehicles_rejects_invalid_sort_field() {
+    let app = test_app().await;
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/vehicles?sort_by=password")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(body["error"], "Invalid sort field");
+}
+
+#[tokio::test]
+#[serial]
+async fn list_vehicles_rejects_invalid_sort_order() {
+    let app = test_app().await;
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/vehicles?order=random")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(body["error"], "Invalid sort order");
+}
