@@ -1,9 +1,11 @@
+use std::time::Duration;
 use std::{env, net::SocketAddr};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
 use dotenvy::dotenv;
-use sqlx::PgPool;
+
+use sqlx::postgres::PgPoolOptions;
 
 use fleet_management_api::{routes::create_routes, state::AppState};
 
@@ -13,9 +15,15 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let db = PgPool::connect(&database_url)
+    let db = PgPoolOptions::new()
+        .max_connections(20)
+        .min_connections(2)
+        .acquire_timeout(Duration::from_secs(3))
+        .idle_timeout(Duration::from_secs(600))
+        .max_lifetime(Duration::from_secs(1800))
+        .connect(&database_url)
         .await
-        .expect("Failed to connect to database");
+        .expect("Failed to connect to PostgreSQL");
     let state = AppState { db };
     let app = create_routes(state).layer(
         TraceLayer::new_for_http()
