@@ -1,6 +1,6 @@
 use crate::errors::AppError;
-use crate::models::{PaginatedResponse, UpdateVehicleRequest};
-use crate::services::delete_vehicle_service;
+use crate::models::{AssignDriverRequest, PaginatedResponse, UpdateVehicleRequest};
+use crate::services::{assign_driver_service, delete_vehicle_service};
 use crate::{
     models::{CreateVehicleRequest, ListVehiclesQuery, Vehicle},
     services::{
@@ -78,4 +78,14 @@ pub async fn delete_vehicle(
     delete_vehicle_service(&state, id).await?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn assign_driver(
+    State(state): State<AppState>,
+    Path(vehicle_id): Path<Uuid>,
+    Json(request): Json<AssignDriverRequest>,
+) -> Result<Json<Vehicle>, AppError> {
+    let vehicle = assign_driver_service(&state, vehicle_id, request.driver_id).await?;
+
+    Ok(Json(vehicle))
 }

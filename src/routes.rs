@@ -1,6 +1,7 @@
 use crate::{
     handlers::{
-        create_vehicle, delete_vehicle, get_vehicle, health_check, list_vehicles, update_vehicle,
+        assign_driver, create_vehicle, delete_vehicle, get_vehicle, health_check, list_vehicles,
+        update_vehicle,
     },
     state::AppState,
 };
@@ -17,5 +18,6 @@ pub fn create_routes(state: AppState) -> Router {
         .route("/vehicles/{id}", get(get_vehicle))
         .route("/vehicles/{id}", put(update_vehicle))
         .route("/vehicles/{id}", delete(delete_vehicle))
+        .route("/vehicles/{id}/assign_driver", post(assign_driver))
         .with_state(state)
 }
