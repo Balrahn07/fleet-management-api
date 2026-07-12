@@ -18,6 +18,6 @@ pub fn create_routes(state: AppState) -> Router {
         .route("/vehicles/{id}", get(get_vehicle))
         .route("/vehicles/{id}", put(update_vehicle))
         .route("/vehicles/{id}", delete(delete_vehicle))
-        .route("/vehicles/{id}/assign_driver", post(assign_driver))
+        .route("/vehicles/{id}/assign-driver", post(assign_driver))
         .with_state(state)
 }

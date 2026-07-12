@@ -3,6 +3,7 @@ use axum::{
     http::{Request, StatusCode},
 };
 use http_body_util::BodyExt;
+use sqlx::{PgPool, postgres::PgPoolOptions};
 use tower::ServiceExt;
 
 use fleet_management_api::{
@@ -12,6 +13,7 @@ use fleet_management_api::{
 };
 
 use serial_test::serial;
+use uuid::Uuid;
 
 /// Builds the Axum app using the dedicated test database.
 ///
@@ -25,7 +27,12 @@ async fn test_app() -> axum::Router {
         .await
         .expect("failed to connect to test database");
 
-    sqlx::query("DELETE FROM vehicles")
+    sqlx::migrate!()
+        .run(&db)
+        .await
+        .expect("failed to run test database migrations");
+
+    sqlx::query("TRUNCATE TABLE vehicles, drivers CASCADE")
         .execute(&db)
         .await
         .expect("failed to clean vehicles table");
@@ -33,6 +40,16 @@ async fn test_app() -> axum::Router {
     let state = AppState { db };
 
     create_routes(state)
+}
+
+async fn test_db_pool() -> PgPool {
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+
+    PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
+        .await
+        .expect("Failed to connect to test database")
 }
 
 #[tokio::test]
@@ -651,4 +668,118 @@ async fn list_vehicles_rejects_invalid_sort_order() {
     let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
     assert_eq!(body["error"], "Invalid sort order");
+}
+
+#[tokio::test]
+#[serial]
+async fn assign_driver_to_vehicle_returns_updated_vehicle() {
+    let app = test_app().await;
+    let db = test_db_pool().await;
+
+    let vehicle_body = r#"{"vin":"5YJ3E1EA7KF317124","model":"Tesla Model 3"}"#;
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/vehicles")
+                .header("Content-Type", "application/json")
+                .body(Body::from(vehicle_body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let vehicle: Vehicle = serde_json::from_slice(&body).unwrap();
+
+    let driver_id = Uuid::new_v4();
+
+    sqlx::query!(
+        r#"
+        INSERT INTO drivers (id, name)
+        VALUES ($1, $2)
+        "#,
+        driver_id,
+        "Alice Martin"
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    let request_body = serde_json::json!({
+        "driver_id": driver_id
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/vehicles/{}/assign-driver", vehicle.id))
+                .header("Content-Type", "application/json")
+                .body(Body::from(request_body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let assigned_vehicle: Vehicle = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(assigned_vehicle.id, vehicle.id);
+    assert_eq!(assigned_vehicle.driver_id, Some(driver_id));
+}
+
+#[tokio::test]
+#[serial]
+async fn assign_driver_returns_not_found_when_driver_does_not_exist() {
+    let app = test_app().await;
+
+    let vehicle_body = r#"{"vin":"5YJ3E1EA7KF317124","model":"Tesla Model 3"}"#;
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/vehicles")
+                .header("Content-Type", "application/json")
+                .body(Body::from(vehicle_body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let vehicle: Vehicle = serde_json::from_slice(&body).unwrap();
+
+    let request_body = serde_json::json!({
+        "driver_id": Uuid::new_v4()
+    })
+    .to_string();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/vehicles/{}/assign-driver", vehicle.id))
+                .header("Content-Type", "application/json")
+                .body(Body::from(request_body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(body["error"], "Driver not found");
 }
