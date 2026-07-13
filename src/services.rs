@@ -52,10 +52,24 @@ pub async fn list_vehicles_service(
 
     let vehicles = repositories::list_vehicles(&state.db, limit, offset, &filter)
         .await
-        .map_err(|_| AppError::Database)?;
+        .map_err(|error| {
+            tracing::error!(
+                error = ?error,
+                "Database operation failed"
+            );
+
+            AppError::Database
+        })?;
     let total = repositories::count_vehicles(&state.db, &filter)
         .await
-        .map_err(|_| AppError::Database)?;
+        .map_err(|error| {
+            tracing::error!(
+                error = ?error,
+                "Database operation failed"
+            );
+
+            AppError::Database
+        })?;
 
     let total_pages = (total + limit - 1) / limit;
 
@@ -77,7 +91,14 @@ pub async fn list_vehicles_service(
 pub async fn get_vehicle_service(state: &AppState, id: Uuid) -> Result<Vehicle, AppError> {
     repositories::get_vehicle(&state.db, id)
         .await
-        .map_err(|_| AppError::Database)?
+        .map_err(|error| {
+            tracing::error!(
+                error = ?error,
+                "Database operation failed"
+            );
+
+            AppError::Database
+        })?
         .ok_or(AppError::VehicleNotFound)
 }
 
@@ -92,7 +113,11 @@ pub async fn create_vehicle_service(
     state: &AppState,
     request: CreateVehicleRequest,
 ) -> Result<Vehicle, AppError> {
-    info!("Validating create vehicle request.");
+    info!(
+        vin = %request.vin,
+        model = %request.model,
+        "Validating create vehicle request"
+    );
 
     validate_create_vehicle_request(&request)?;
 
@@ -114,7 +139,11 @@ pub async fn update_vehicle_service(
     id: Uuid,
     request: UpdateVehicleRequest,
 ) -> Result<Vehicle, AppError> {
-    info!("Validating update vehicle request.");
+    info!(
+        vehicle_id = %id,
+        status = %request.status,
+        "Updating vehicle status"
+    );
 
     validate_status(&request.status)?;
 
