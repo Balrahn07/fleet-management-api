@@ -6,6 +6,8 @@ pub trait Cache: Send + Sync {
     async fn get(&self, key: &str) -> Option<String>;
 
     async fn set(&self, key: &str, value: String);
+
+    async fn remove(&self, key: &str);
 }
 
 pub struct InMemoryCache {
@@ -28,5 +30,9 @@ impl Cache for InMemoryCache {
 
     async fn set(&self, key: &str, value: String) {
         self.store.insert(key.to_owned(), value);
+    }
+
+    async fn remove(&self, key: &str) {
+        self.store.remove(key);
     }
 }

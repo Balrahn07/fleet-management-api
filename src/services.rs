@@ -182,19 +182,45 @@ pub async fn update_vehicle_service(
 
     validate_status(&request.status)?;
 
-    repositories::update_vehicle(&state.db, id, request.status)
+    let vehicle = repositories::update_vehicle(&state.db, id, request.status)
         .await
         .map_err(|error| match error {
             sqlx::Error::RowNotFound => AppError::VehicleNotFound,
-            _ => AppError::Database,
-        })
+            other => {
+                tracing::error!(
+                    vehicle_id = %id,
+                    error = %other,
+                    "Failed to update vehicle"
+                );
+
+                AppError::Database
+            }
+        })?;
+
+    let cache_key = format!("vehicle:{id}");
+    state.cache.remove(&cache_key).await;
+
+    Ok(vehicle)
 }
 
 pub async fn delete_vehicle_service(state: &AppState, id: Uuid) -> Result<(), AppError> {
     match repositories::delete_vehicle(&state.db, id).await {
-        Ok(true) => Ok(()),
+        Ok(true) => {
+            let cache_key = format!("vehicle:{id}");
+            state.cache.remove(&cache_key).await;
+
+            Ok(())
+        }
         Ok(false) => Err(AppError::VehicleNotFound),
-        Err(_) => Err(AppError::Database),
+        Err(error) => {
+            tracing::error!(
+                vehicle_id = %id,
+                error = %error,
+                "Failed to delete vehicle"
+            );
+
+            Err(AppError::Database)
+        }
     }
 }
 
