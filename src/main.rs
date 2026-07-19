@@ -1,4 +1,4 @@
-use fleet_management_api::config::DatabaseConfig;
+use fleet_management_api::{cache::InMemoryCache, config::DatabaseConfig};
 use std::net::SocketAddr;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing::Level;
@@ -19,7 +19,10 @@ async fn main() {
         .await
         .expect("Failed to create PostgreSQL connection pool");
 
-    let state = AppState { db };
+    let state = AppState {
+        db,
+        cache: Arc::new(InMemoryCache::new()),
+    };
 
     let app = create_routes(state).layer(
         TraceLayer::new_for_http()
