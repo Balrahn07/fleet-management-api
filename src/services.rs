@@ -89,17 +89,52 @@ pub async fn list_vehicles_service(
 }
 
 pub async fn get_vehicle_service(state: &AppState, id: Uuid) -> Result<Vehicle, AppError> {
-    repositories::get_vehicle(&state.db, id)
+    let cache_key = format!("vehicle:{id}");
+
+    if let Some(cached_vehicle) = state.cache.get(&cache_key).await {
+        tracing::info!(vehicle_id = %id, "Cache hit");
+
+        let vehicle = serde_json::from_str::<Vehicle>(&cached_vehicle).map_err(|error| {
+            tracing::error!(
+                vehicle_id = %id,
+                error = %error,
+                "Failed to deserialize cached vehicle"
+            );
+
+            AppError::Cache
+        })?;
+
+        return Ok(vehicle);
+    }
+
+    tracing::info!(vehicle_id = %id, "Cache miss");
+
+    let vehicle = repositories::get_vehicle(&state.db, id)
         .await
         .map_err(|error| {
             tracing::error!(
-                error = ?error,
-                "Database operation failed"
+                vehicle_id = %id,
+                error = %error,
+                "Failed to retrieve vehicle"
             );
 
             AppError::Database
         })?
-        .ok_or(AppError::VehicleNotFound)
+        .ok_or(AppError::VehicleNotFound)?;
+
+    let serialized_vehicle = serde_json::to_string(&vehicle).map_err(|error| {
+        tracing::error!(
+            vehicle_id = %id,
+            error = %error,
+            "Failed to serialize vehicle"
+        );
+
+        AppError::Cache
+    })?;
+
+    state.cache.set(&cache_key, serialized_vehicle).await;
+
+    Ok(vehicle)
 }
 
 /// Creates a new vehicle.

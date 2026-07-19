@@ -1,5 +1,5 @@
 use fleet_management_api::{cache::InMemoryCache, config::DatabaseConfig};
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 

@@ -24,6 +24,7 @@ pub enum AppError {
     DriverNotFound,
     VehicleAlreadyAssigned,
     DriverAlreadyAssigned,
+    Cache,
 }
 
 impl AppError {
@@ -42,6 +43,7 @@ impl AppError {
             AppError::DriverNotFound => StatusCode::NOT_FOUND,
             AppError::VehicleAlreadyAssigned => StatusCode::CONFLICT,
             AppError::DriverAlreadyAssigned => StatusCode::CONFLICT,
+            AppError::Cache => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
@@ -64,6 +66,7 @@ impl AppError {
             AppError::DriverAlreadyAssigned => {
                 "Driver is already assigned to another vehicle".to_string()
             }
+            AppError::Cache => "Cache error".to_string(),
         }
     }
 }
