@@ -1,5 +1,5 @@
 use fleet_management_api::{cache::InMemoryCache, config::DatabaseConfig};
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
@@ -21,7 +21,7 @@ async fn main() {
 
     let state = AppState {
         db,
-        cache: Arc::new(InMemoryCache::new()),
+        cache: Arc::new(InMemoryCache::new(Duration::from_secs(60))),
     };
 
     let app = create_routes(state).layer(

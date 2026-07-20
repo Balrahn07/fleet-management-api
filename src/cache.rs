@@ -1,6 +1,8 @@
 use async_trait::async_trait;
 use dashmap::DashMap;
 
+use std::time::{Duration, Instant};
+
 #[async_trait]
 pub trait Cache: Send + Sync {
     async fn get(&self, key: &str) -> Option<String>;
@@ -10,14 +12,21 @@ pub trait Cache: Send + Sync {
     async fn remove(&self, key: &str);
 }
 
+struct CacheEntry {
+    value: String,
+    expires_at: Instant,
+}
+
 pub struct InMemoryCache {
-    store: DashMap<String, String>,
+    store: DashMap<String, CacheEntry>,
+    ttl: Duration,
 }
 
 impl InMemoryCache {
-    pub fn new() -> Self {
+    pub fn new(ttl: Duration) -> Self {
         Self {
             store: DashMap::new(),
+            ttl,
         }
     }
 }
@@ -25,11 +34,24 @@ impl InMemoryCache {
 #[async_trait]
 impl Cache for InMemoryCache {
     async fn get(&self, key: &str) -> Option<String> {
-        self.store.get(key).map(|value| value.clone())
+        let entry = self.store.get(key)?;
+
+        if Instant::now() >= entry.expires_at {
+            drop(entry);
+            self.store.remove(key);
+            return None;
+        }
+
+        Some(entry.value.clone())
     }
 
     async fn set(&self, key: &str, value: String) {
-        self.store.insert(key.to_owned(), value);
+        let entry = CacheEntry {
+            value,
+            expires_at: Instant::now() + self.ttl,
+        };
+
+        self.store.insert(key.to_owned(), entry);
     }
 
     async fn remove(&self, key: &str) {
