@@ -7,11 +7,7 @@ use std::time::{Duration, Instant};
 pub trait Cache: Send + Sync {
     async fn get(&self, key: &str) -> Result<Option<String>, CacheError>;
 
-    async fn set(
-        &self,
-        key: &str,
-        value: String,
-    ) -> Result<(), CacheError>;
+    async fn set(&self, key: &str, value: String) -> Result<(), CacheError>;
 
     async fn remove(&self, key: &str) -> Result<(), CacheError>;
 }
@@ -58,11 +54,7 @@ impl Cache for InMemoryCache {
         Ok(Some(entry.value.clone()))
     }
 
-    async fn set(
-        &self,
-        key: &str,
-        value: String,
-    ) -> Result<(), CacheError> {
+    async fn set(&self, key: &str, value: String) -> Result<(), CacheError> {
         let entry = CacheEntry {
             value,
             expires_at: Instant::now() + self.ttl,
@@ -112,11 +104,7 @@ impl Cache for RedisCache {
             .map_err(|error| CacheError::Backend(error.to_string()))
     }
 
-    async fn set(
-        &self,
-        key: &str,
-        value: String,
-    ) -> Result<(), CacheError> {
+    async fn set(&self, key: &str, value: String) -> Result<(), CacheError> {
         let mut connection = self
             .client
             .get_multiplexed_async_connection()

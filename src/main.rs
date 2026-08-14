@@ -1,5 +1,5 @@
-use fleet_management_api::{cache::InMemoryCache, config::DatabaseConfig};
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use fleet_management_api::{cache::RedisCache, config::DatabaseConfig};
+use std::{net::SocketAddr, sync::Arc};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
@@ -19,9 +19,19 @@ async fn main() {
         .await
         .expect("Failed to create PostgreSQL connection pool");
 
+    let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL must be set");
+
+    let redis_ttl_seconds = std::env::var("REDIS_TTL_SECONDS")
+        .unwrap_or_else(|_| "60".to_string())
+        .parse::<u64>()
+        .expect("REDIS_TTL_SECONDS must be an integer");
+
+    let cache =
+        RedisCache::new(&redis_url, redis_ttl_seconds).expect("Failed to create Redis client");
+
     let state = AppState {
         db,
-        cache: Arc::new(InMemoryCache::new(Duration::from_secs(60))),
+        cache: Arc::new(cache),
     };
 
     let app = create_routes(state).layer(

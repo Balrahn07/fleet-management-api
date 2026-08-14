@@ -95,16 +95,15 @@ pub async fn get_vehicle_service(state: &AppState, id: Uuid) -> Result<Vehicle, 
         Ok(Some(cached_vehicle)) => {
             tracing::info!(vehicle_id = %id, "Cache hit");
 
-            let vehicle = serde_json::from_str::<Vehicle>(&cached_vehicle)
-                .map_err(|error| {
-                    tracing::error!(
-                        vehicle_id = %id,
-                        error = %error,
-                        "Failed to deserialize cached vehicle"
-                    );
+            let vehicle = serde_json::from_str::<Vehicle>(&cached_vehicle).map_err(|error| {
+                tracing::error!(
+                    vehicle_id = %id,
+                    error = %error,
+                    "Failed to deserialize cached vehicle"
+                );
 
-                    AppError::Cache
-                })?;
+                AppError::Cache
+            })?;
 
             return Ok(vehicle);
         }
