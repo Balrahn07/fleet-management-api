@@ -58,3 +58,40 @@ impl Cache for InMemoryCache {
         self.store.remove(key);
     }
 }
+
+pub struct RedisCache {
+    client: redis::Client,
+    ttl_seconds: u64,
+}
+
+impl RedisCache {
+    pub fn new(redis_url: &str, ttl_seconds: u64) -> Result<Self, redis::RedisError> {
+        let client = redis::Client::open(redis_url)?;
+
+        Ok(Self {
+            client,
+            ttl_seconds,
+        })
+    }
+}
+
+#[async_trait]
+impl Cache for RedisCache {
+    async fn get(&self, key: &str) -> Option<String> {
+        let mut connection = self.client.get_multiplexed_async_connection().await.ok()?;
+
+        redis::cmd("GET")
+            .arg(key)
+            .query_async(&mut connection)
+            .await
+            .ok()
+    }
+
+    async fn set(&self, key: &str, value: String) {
+        todo!()
+    }
+
+    async fn remove(&self, key: &str) {
+        todo!()
+    }
+}
