@@ -91,23 +91,36 @@ pub async fn list_vehicles_service(
 pub async fn get_vehicle_service(state: &AppState, id: Uuid) -> Result<Vehicle, AppError> {
     let cache_key = format!("vehicle:{id}");
 
-    if let Some(cached_vehicle) = state.cache.get(&cache_key).await {
-        tracing::info!(vehicle_id = %id, "Cache hit");
+    match state.cache.get(&cache_key).await {
+        Ok(Some(cached_vehicle)) => {
+            tracing::info!(vehicle_id = %id, "Cache hit");
 
-        let vehicle = serde_json::from_str::<Vehicle>(&cached_vehicle).map_err(|error| {
-            tracing::error!(
+            let vehicle = serde_json::from_str::<Vehicle>(&cached_vehicle)
+                .map_err(|error| {
+                    tracing::error!(
+                        vehicle_id = %id,
+                        error = %error,
+                        "Failed to deserialize cached vehicle"
+                    );
+
+                    AppError::Cache
+                })?;
+
+            return Ok(vehicle);
+        }
+
+        Ok(None) => {
+            tracing::info!(vehicle_id = %id, "Cache miss");
+        }
+
+        Err(error) => {
+            tracing::warn!(
                 vehicle_id = %id,
-                error = %error,
-                "Failed to deserialize cached vehicle"
+                error = ?error,
+                "Cache unavailable, falling back to database"
             );
-
-            AppError::Cache
-        })?;
-
-        return Ok(vehicle);
+        }
     }
-
-    tracing::info!(vehicle_id = %id, "Cache miss");
 
     let vehicle = repositories::get_vehicle(&state.db, id)
         .await
@@ -132,8 +145,13 @@ pub async fn get_vehicle_service(state: &AppState, id: Uuid) -> Result<Vehicle, 
         AppError::Cache
     })?;
 
-    state.cache.set(&cache_key, serialized_vehicle).await;
-
+    if let Err(error) = state.cache.set(&cache_key, serialized_vehicle).await {
+        tracing::warn!(
+            vehicle_id = %id,
+            error = ?error,
+            "Failed to populate cache"
+        );
+    }
     Ok(vehicle)
 }
 
@@ -198,8 +216,13 @@ pub async fn update_vehicle_service(
         })?;
 
     let cache_key = format!("vehicle:{id}");
-    state.cache.remove(&cache_key).await;
-
+    if let Err(error) = state.cache.remove(&cache_key).await {
+        tracing::warn!(
+            vehicle_id = %id,
+            error = ?error,
+            "Failed to invalidate cache"
+        );
+    }
     Ok(vehicle)
 }
 
@@ -207,8 +230,13 @@ pub async fn delete_vehicle_service(state: &AppState, id: Uuid) -> Result<(), Ap
     match repositories::delete_vehicle(&state.db, id).await {
         Ok(true) => {
             let cache_key = format!("vehicle:{id}");
-            state.cache.remove(&cache_key).await;
-
+            if let Err(error) = state.cache.remove(&cache_key).await {
+                tracing::warn!(
+                    vehicle_id = %id,
+                    error = ?error,
+                    "Failed to invalidate cache"
+                );
+            }
             Ok(())
         }
         Ok(false) => Err(AppError::VehicleNotFound),

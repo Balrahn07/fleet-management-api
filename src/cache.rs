@@ -5,11 +5,21 @@ use std::time::{Duration, Instant};
 
 #[async_trait]
 pub trait Cache: Send + Sync {
-    async fn get(&self, key: &str) -> Option<String>;
+    async fn get(&self, key: &str) -> Result<Option<String>, CacheError>;
 
-    async fn set(&self, key: &str, value: String);
+    async fn set(
+        &self,
+        key: &str,
+        value: String,
+    ) -> Result<(), CacheError>;
 
-    async fn remove(&self, key: &str);
+    async fn remove(&self, key: &str) -> Result<(), CacheError>;
+}
+
+#[derive(Debug)]
+pub enum CacheError {
+    Backend(String),
+    Serialization(String),
 }
 
 struct CacheEntry {
@@ -33,29 +43,40 @@ impl InMemoryCache {
 
 #[async_trait]
 impl Cache for InMemoryCache {
-    async fn get(&self, key: &str) -> Option<String> {
-        let entry = self.store.get(key)?;
+    async fn get(&self, key: &str) -> Result<Option<String>, CacheError> {
+        let entry = match self.store.get(key) {
+            Some(entry) => entry,
+            None => return Ok(None),
+        };
 
         if Instant::now() >= entry.expires_at {
             drop(entry);
             self.store.remove(key);
-            return None;
+            return Ok(None);
         }
 
-        Some(entry.value.clone())
+        Ok(Some(entry.value.clone()))
     }
 
-    async fn set(&self, key: &str, value: String) {
+    async fn set(
+        &self,
+        key: &str,
+        value: String,
+    ) -> Result<(), CacheError> {
         let entry = CacheEntry {
             value,
             expires_at: Instant::now() + self.ttl,
         };
 
         self.store.insert(key.to_owned(), entry);
+
+        Ok(())
     }
 
-    async fn remove(&self, key: &str) {
+    async fn remove(&self, key: &str) -> Result<(), CacheError> {
         self.store.remove(key);
+
+        Ok(())
     }
 }
 
@@ -77,21 +98,51 @@ impl RedisCache {
 
 #[async_trait]
 impl Cache for RedisCache {
-    async fn get(&self, key: &str) -> Option<String> {
-        let mut connection = self.client.get_multiplexed_async_connection().await.ok()?;
+    async fn get(&self, key: &str) -> Result<Option<String>, CacheError> {
+        let mut connection = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|error| CacheError::Backend(error.to_string()))?;
 
         redis::cmd("GET")
             .arg(key)
             .query_async(&mut connection)
             .await
-            .ok()
+            .map_err(|error| CacheError::Backend(error.to_string()))
     }
 
-    async fn set(&self, key: &str, value: String) {
-        todo!()
+    async fn set(
+        &self,
+        key: &str,
+        value: String,
+    ) -> Result<(), CacheError> {
+        let mut connection = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|error| CacheError::Backend(error.to_string()))?;
+
+        redis::cmd("SETEX")
+            .arg(key)
+            .arg(self.ttl_seconds)
+            .arg(value)
+            .query_async::<()>(&mut connection)
+            .await
+            .map_err(|error| CacheError::Backend(error.to_string()))
     }
 
-    async fn remove(&self, key: &str) {
-        todo!()
+    async fn remove(&self, key: &str) -> Result<(), CacheError> {
+        let mut connection = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|error| CacheError::Backend(error.to_string()))?;
+
+        redis::cmd("DEL")
+            .arg(key)
+            .query_async::<()>(&mut connection)
+            .await
+            .map_err(|error| CacheError::Backend(error.to_string()))
     }
 }
