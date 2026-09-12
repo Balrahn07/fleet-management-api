@@ -87,6 +87,7 @@ pub async fn create_vehicle(
 }
 
 pub async fn update_vehicle(db: &PgPool, id: Uuid, status: String) -> Result<Vehicle, sqlx::Error> {
+    let mut tx = db.begin().await?;
     let vehicle = sqlx::query_as!(
         Vehicle,
         r#"
@@ -98,9 +99,19 @@ pub async fn update_vehicle(db: &PgPool, id: Uuid, status: String) -> Result<Veh
         status,
         id
     )
-    .fetch_one(db)
+    .fetch_one(&mut *tx)
     .await?;
 
+    insert_outbox_event(
+        &mut tx,
+        Uuid::new_v4(),
+        "VehicleStatusChanged",
+        vehicle.id,
+        serde_json::json!({ "vehicle_id": vehicle.id, "status": vehicle.status }),
+    )
+    .await?;
+
+    tx.commit().await?;
     Ok(vehicle)
 }
 
@@ -222,4 +233,32 @@ pub async fn assign_driver_to_vehicle(
     .await?;
 
     Ok(vehicle)
+}
+
+pub async fn insert_outbox_event(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+    event_type: &str,
+    aggregate_id: Uuid,
+    payload: serde_json::Value,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+        INSERT INTO outbox_events (
+            id,
+            event_type,
+            aggregate_id,
+            payload
+        )
+        VALUES ($1, $2, $3, $4)
+        "#,
+        id,
+        event_type,
+        aggregate_id,
+        payload
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
 }

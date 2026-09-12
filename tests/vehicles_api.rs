@@ -32,12 +32,18 @@ async fn test_app() -> axum::Router {
         .await
         .expect("failed to run test database migrations");
 
-    sqlx::query("TRUNCATE TABLE vehicles, drivers CASCADE")
+    sqlx::query("TRUNCATE TABLE vehicles, drivers, outbox_events CASCADE")
         .execute(&db)
         .await
         .expect("failed to clean vehicles table");
 
-    let state = AppState { db };
+    let state = AppState {
+        db,
+        cache: std::sync::Arc::new(fleet_management_api::cache::InMemoryCache::new(
+            std::time::Duration::from_secs(60),
+        )),
+        event_publisher: std::sync::Arc::new(UnusedPublisher),
+    };
 
     create_routes(state)
 }
@@ -58,7 +64,12 @@ async fn health_check_returns_ok() {
     let app = test_app().await;
 
     let response = app
-        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -782,4 +793,13 @@ async fn assign_driver_returns_not_found_when_driver_does_not_exist() {
     let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
     assert_eq!(body["error"], "Driver not found");
+}
+
+struct UnusedPublisher;
+
+#[async_trait::async_trait]
+impl fleet_management_api::events::EventPublisher for UnusedPublisher {
+    async fn publish(&self, _: &str, _: &str, _: &str) -> Result<(), String> {
+        panic!("HTTP handlers must write to the outbox instead of publishing directly");
+    }
 }

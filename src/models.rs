@@ -80,3 +80,13 @@ pub struct Driver {
 pub struct AssignDriverRequest {
     pub driver_id: Uuid,
 }
+
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+pub struct OutboxEvent {
+    pub id: Uuid,
+    pub event_type: String,
+    pub aggregate_id: Uuid,
+    pub payload: serde_json::Value,
+    pub created_at: DateTime<Utc>,
+    pub published_at: Option<DateTime<Utc>>,
+}

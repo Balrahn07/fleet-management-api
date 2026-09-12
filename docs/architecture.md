@@ -976,3 +976,33 @@ partitions are distributed among consumers
 
 ------------------------------------------------------------------------
 
+
+## Transactional outbox implementation
+
+A status update writes the vehicle and a VehicleStatusChanged outbox row in
+one PostgreSQL transaction. Every successful status update request emits an
+event, including a request that repeats the current status.
+
+A Tokio task polls every second and processes up to 100 rows per tick.
+Each row is selected using FOR UPDATE SKIP LOCKED inside a transaction.
+The worker publishes to vehicle-events with aggregate_id (the vehicle UUID)
+as its key, then sets published_at and commits after Kafka confirms delivery.
+A partial index supports the pending-row query.
+
+The JSON envelope contains id, event_type, aggregate_id, created_at, and payload.
+Delivery failures leave the row pending and stop the current batch; the next
+tick retries it. Kafka message delivery times out after 10 seconds.
+Ctrl+C drains HTTP requests, then lets the worker finish its in-flight event.
+
+Delivery is at least once: a crash after Kafka accepts the message but before
+PostgreSQL commits can cause a duplicate. Consumers should deduplicate by id.
+Row locks prevent simultaneous claims of the same row, but multiple workers
+can publish different events for a vehicle out of order. This version does
+not promise strict per-vehicle event ordering. It also retains published rows;
+retention cleanup and retry backoff are future improvements.
+
+Apply migrations with sqlx migrate run before starting the API.
+Set KAFKA_BROKERS (default localhost:9092) and provision the vehicle-events topic.
+The outbox integration tests use isolated databases via sqlx::test and a fake
+publisher, so they require PostgreSQL with database-creation privileges but no
+Kafka. They cover successful delivery, retry, and atomic rollback.
