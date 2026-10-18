@@ -78,8 +78,13 @@ pub async fn record_with_retry(db: &PgPool, event: &VehicleStatusEvent) -> Resul
     unreachable!()
 }
 
-/// Process sequentially so a later offset cannot acknowledge an earlier failed record.
-pub async fn consume_one(db: &PgPool, consumer: &Arc<StreamConsumer>) -> Result<(), String> {
+/// Process sequentially; acknowledge only after a history write OR confirmed DLQ delivery.
+pub async fn consume_one(
+    db: &PgPool,
+    consumer: &Arc<StreamConsumer>,
+    publisher: &dyn crate::events::EventPublisher,
+    dlq_topic: &str,
+) -> Result<(), String> {
     let message = consumer.recv().await.map_err(|e| e.to_string())?;
     let context = format!(
         "{}:{}:{}",
@@ -87,13 +92,35 @@ pub async fn consume_one(db: &PgPool, consumer: &Arc<StreamConsumer>) -> Result<
         message.partition(),
         message.offset()
     );
-    let bytes = message
+    if dlq_topic == message.topic() {
+        return Err("Dead-letter topic must differ from the source topic".into());
+    }
+    let decoded = message
         .payload()
-        .ok_or_else(|| format!("{context}: empty Kafka payload"))?;
-    let event = VehicleStatusEvent::decode(bytes).map_err(|e| format!("{context}: {e}"))?;
-    let inserted = record_with_retry(db, &event)
-        .await
-        .map_err(|e| format!("{context}: {e}"))?;
+        .ok_or_else(|| "Missing Kafka payload".to_string())
+        .and_then(VehicleStatusEvent::decode);
+
+    match decoded {
+        Ok(event) => {
+            // Database errors are operational failures, not invalid events. Never send them to DLQ.
+            let inserted = record_with_retry(db, &event)
+                .await
+                .map_err(|e| format!("{context}: {e}"))?;
+            tracing::info!(event_id = %event.id, inserted, "History saved");
+        }
+        Err(error) => {
+            let rejected = crate::dead_letter::DeadLetter::from_message(&message, error);
+            let payload = serde_json::to_string(&rejected).map_err(|e| e.to_string())?;
+            publisher
+                .publish(dlq_topic, &rejected.id, &payload)
+                .await
+                .map_err(|e| {
+                    format!("{context}: dead-letter delivery failed; offset not committed: {e}")
+                })?;
+            tracing::warn!(position = %context, dead_letter_id = %rejected.id,
+                error = %rejected.error, "Rejected message delivered to dead-letter topic");
+        }
+    }
 
     // A synchronous Kafka commit blocks; run it outside Tokio's async worker threads.
     let owned_message = message.detach();
@@ -110,8 +137,8 @@ pub async fn consume_one(db: &PgPool, consumer: &Arc<StreamConsumer>) -> Result<
     })
     .await
     .map_err(|e| e.to_string())?
-    .map_err(|e| format!("{context}: history saved but offset commit failed: {e}"))?;
+    .map_err(|e| format!("{context}: processing succeeded but offset commit failed: {e}"))?;
 
-    tracing::info!(event_id = %event.id, inserted, position = %context, "History saved and offset committed");
+    tracing::info!(position = %context, "Kafka offset committed");
     Ok(())
 }

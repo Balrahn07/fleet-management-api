@@ -1,32 +1,32 @@
 # Vehicle status history consumer
 
-The API and publisher keep their existing roles. A separate Rust binary consumes
-`vehicle-events` and records each status event in `vehicle_status_history`.
-
-## Run locally
-
-Start PostgreSQL, Redis, and Kafka as described in [the Kafka demo](kafka-demo.md).
-Apply migrations before starting the consumer (SQLx CLI required):
+A separate Rust binary consumes vehicle-events and records valid status events
+in vehicle_status_history. See the [README](../README.md) for environment setup
+and creation of both Kafka topics.
 
 ```text
 sqlx migrate run
 cargo run --bin vehicle-history-consumer
 ```
 
-In another terminal, start the API with `cargo run` (the default binary is still
-fleet-management-api). Follow the demo to update a vehicle.
+Start the API in another terminal with cargo run. DATABASE_URL selects the
+history database, KAFKA_BROKERS defaults to localhost:9092, and
+KAFKA_HISTORY_GROUP defaults to vehicle-status-history.
 
-Configuration:
-- DATABASE_URL: PostgreSQL connection used for history.
-- KAFKA_BROKERS: defaults to localhost:9092.
-- KAFKA_HISTORY_GROUP: defaults to vehicle-status-history.
+## Save before acknowledging
 
-The same consumer group resumes from its committed offsets. A new group reads
-retained records from the beginning. The history table still deduplicates by event
-ID even when you use a different group. With one topic partition, only one member
-of a group can actively consume that partition.
+Processing is sequential: receive, validate, INSERT history, then commit
+offset+1. Automatic offset storage and commits are disabled. The synchronous
+Kafka commit runs on a blocking thread, outside Tokio's async workers.
 
-Inspect saved history in PostgreSQL:
+If the consumer exits after saving but before committing, Kafka can replay the
+record. The event_id primary key and ON CONFLICT DO NOTHING make that replay
+safe. This is at-least-once delivery with idempotent database writes, not a
+transaction spanning Kafka and PostgreSQL.
+
+History has no foreign key to vehicles: delayed events must remain recordable
+after a vehicle is deleted. occurred_at is the event time; recorded_at is the
+insertion time. Arrival order is not guaranteed to be chronological.
 
 ```sql
 SELECT event_id, vehicle_id, status, occurred_at, recorded_at
@@ -34,40 +34,23 @@ FROM vehicle_status_history
 ORDER BY occurred_at, event_id;
 ```
 
-## Why save before committing?
+The same consumer group resumes from its committed offsets; a new group reads
+retained records from the beginning. One partition permits one active consumer
+per group. Event-ID deduplication still applies across groups.
 
-Processing is sequential: receive, validate, INSERT history, then commit offset+1.
-Both automatic offset storage and automatic commits are disabled. The Kafka
-commit is synchronous and runs on a blocking thread so it does not block Tokio's
-async worker threads.
+## Failure policy
 
-A crash after the INSERT but before the offset commit causes replay.
-The primary key is event_id; INSERT ... ON CONFLICT DO NOTHING makes that replay
-a no-op. A duplicate is acknowledged only after the database confirms success.
-This is at-least-once delivery with idempotent database writes, not an atomic
-transaction across Kafka and PostgreSQL.
-
-The history has no foreign key to vehicles. A delayed event must still be saved
-after its vehicle is deleted. It records event time separately from insertion
-time. It is a history log, not an assertion that arrival order is chronological.
-
-## Failures and shutdown
-
-Transient database errors retry up to five times, with delays of 1, 2, 4, and 8
-seconds. Each write has a 10-second timeout so processing remains below the
-five-minute Kafka poll interval. Schema and constraint errors stop immediately.
-If retries are exhausted or the Kafka offset commit fails, the process exits
-nonzero and leaves the record available for replay when restarted.
-
-Malformed JSON, unknown event types, missing payloads, mismatched vehicle IDs,
-and invalid statuses stop the consumer without acknowledging the failing record.
-The log identifies topic, partition, and offset. Investigate/fix the source or
-consumer before restarting; repeatedly restarting cannot fix a poison message.
-There is no dead-letter topic or automatic skip in this version.
-
-Ctrl+C stops consumption. An in-flight write may already have succeeded, so a
-subsequent start may replay it safely. A rebalance or ambiguous network failure
-can also lead to duplicates, handled by the same event-ID constraint.
+- Invalid JSON, unknown types, missing payloads, mismatched IDs, or invalid
+  statuses are sent to vehicle-events-dlq. Only successful delivery allows the
+  original offset to be committed. See [dead-letter handling](dead-letter.md).
+- Transient database failures retry five times, waiting 1, 2, 4, then 8 seconds.
+  Each write has a 10-second timeout, below the five-minute Kafka poll interval.
+- Schema/constraint failures stop immediately. Exhausted database retries, DLQ
+  delivery failures, receive errors, or offset-commit failures exit nonzero.
+  Database failures never route otherwise valid messages to the DLQ.
+- Ctrl+C stops consumption. An in-flight write or DLQ delivery may have completed
+  without an offset commit; restart can therefore cause safe history replay or
+  a duplicate DLQ record.
 
 ## Tests
 
@@ -76,16 +59,9 @@ cargo test --locked
 cargo test --locked --test history -- --ignored
 ```
 
-The standard suite uses SQLx-managed isolated PostgreSQL databases. It checks
-wire compatibility, invalid events, concurrent duplicate delivery, independent
-events for one vehicle, and permanent database failures.
-
-The ignored test also requires Kafka. It creates a unique topic and group,
-saves an event without committing (simulating the crash window), restarts the
-consumer, checks replay produces one history row, verifies the committed offset,
-and verifies a malformed event leaves that offset unchanged. It removes its
-topic after success. A failed test may leave its uniquely named history-test-*
-topic for diagnosis.
-
-Prerequisite: DATABASE_URL must connect to a PostgreSQL role allowed to create
-test databases. The Kafka test uses KAFKA_BROKERS or localhost:9092.
+The standard suite checks event validation, concurrent duplicate history writes,
+multiple events per vehicle, database retries, and dead-letter byte preservation.
+The ignored test uses real Kafka plus an isolated SQLx database. It simulates the
+save-before-commit crash window, verifies failed DLQ delivery leaves the offset
+unchanged, restarts and forwards successfully, processes a subsequent valid
+event, and confirms a database failure neither commits nor dead-letters.

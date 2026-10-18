@@ -1010,3 +1010,7 @@ Kafka. They cover successful delivery, retry, and atomic rollback.
 ## Vehicle status history consumer
 
 A separate consumer stores Kafka status events idempotently and commits offsets only after a successful database write. See [the consumer walkthrough](history-consumer.md) for startup, retries, replay, and failure behavior.
+
+## Dead-letter handling
+
+The history consumer now forwards invalid events to vehicle-events-dlq and commits the source offset only after confirmed delivery. Database failures retain their retry/stop policy. See [dead-letter handling](dead-letter.md) for metadata, duplicate behavior, inspection, and limitations.

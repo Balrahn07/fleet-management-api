@@ -11,6 +11,7 @@ The sample `.env.example` lists all required connection settings.
 ```powershell
 docker compose -f compose.kafka.yaml up -d --wait
 docker compose -f compose.kafka.yaml exec -T kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --if-not-exists --topic vehicle-events --partitions 1 --replication-factor 1
+docker compose -f compose.kafka.yaml exec -T kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --if-not-exists --topic vehicle-events-dlq --partitions 1 --replication-factor 1
 cargo run --locked
 ```
 

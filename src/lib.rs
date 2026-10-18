@@ -9,5 +9,6 @@ pub mod routes;
 pub mod services;
 pub mod state;
 
+pub mod dead_letter;
 pub mod history;
 pub mod outbox;

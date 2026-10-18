@@ -111,20 +111,41 @@ async fn permanent_database_errors_stop_without_retries(pool: PgPool) {
     assert!(result.is_err());
 }
 
-/// Uses an isolated SQLx database, a unique Kafka topic and group; requires Kafka.
+/// Real Kafka: replay, failed forwarding, safe acknowledgement, and continued processing.
 #[sqlx::test]
 #[ignore = "requires local Kafka; run with --ignored"]
-async fn kafka_restart_replay_and_poison_message(pool: PgPool) {
-    use fleet_management_api::events::{EventPublisher, KafkaPublisher};
+async fn kafka_replay_dead_letters_and_failure_boundaries(pool: PgPool) {
+    use fleet_management_api::{
+        dead_letter::DeadLetter,
+        events::{EventPublisher, KafkaPublisher},
+    };
     use rdkafka::{
         ClientConfig, Message, Offset, TopicPartitionList,
         admin::{AdminClient, AdminOptions, NewTopic, TopicReplication},
         client::DefaultClientContext,
         consumer::Consumer,
+        producer::{FutureProducer, FutureRecord},
     };
     use std::{sync::Arc, time::Duration};
+
+    struct FailedPublisher;
+    #[async_trait::async_trait]
+    impl EventPublisher for FailedPublisher {
+        async fn publish(&self, _: &str, _: &str, _: &str) -> Result<(), String> {
+            Err("simulated DLQ outage".into())
+        }
+    }
+    struct UnexpectedPublisher;
+    #[async_trait::async_trait]
+    impl EventPublisher for UnexpectedPublisher {
+        async fn publish(&self, _: &str, _: &str, _: &str) -> Result<(), String> {
+            panic!("Database failures must not be sent to the DLQ")
+        }
+    }
+
     let brokers = std::env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".into());
     let topic = format!("history-test-{}", Uuid::new_v4());
+    let dlq = format!("{topic}-dlq");
     let group = format!("history-test-{}", Uuid::new_v4());
     let admin: AdminClient<DefaultClientContext> = ClientConfig::new()
         .set("bootstrap.servers", &brokers)
@@ -132,12 +153,15 @@ async fn kafka_restart_replay_and_poison_message(pool: PgPool) {
         .unwrap();
     let results = admin
         .create_topics(
-            &[NewTopic::new(&topic, 1, TopicReplication::Fixed(1))],
+            &[
+                NewTopic::new(&topic, 1, TopicReplication::Fixed(1)),
+                NewTopic::new(&dlq, 1, TopicReplication::Fixed(1)),
+            ],
             &AdminOptions::new(),
         )
         .await
         .unwrap();
-    assert!(results[0].is_ok());
+    assert!(results.iter().all(Result::is_ok));
     let publisher = KafkaPublisher::new(&brokers).unwrap();
     let event = event();
     let payload = serde_json::to_string(&event).unwrap();
@@ -152,63 +176,144 @@ async fn kafka_restart_replay_and_poison_message(pool: PgPool) {
         .await
         .unwrap()
         .unwrap();
-    let decoded = VehicleStatusEvent::decode(message.payload().unwrap()).unwrap();
-    history::record_event(&pool, &decoded).await.unwrap();
+    history::record_event(
+        &pool,
+        &VehicleStatusEvent::decode(message.payload().unwrap()).unwrap(),
+    )
+    .await
+    .unwrap();
     drop(message);
-    // Simulate exiting after DB success but BEFORE committing the offset.
     first.unsubscribe();
-    drop(first);
+    drop(first); // DB saved, offset not committed: simulate crash window.
 
-    let restarted = Arc::new(history::create_consumer(&brokers, &group).unwrap());
-    restarted.subscribe(&[&topic]).unwrap();
+    let consumer = Arc::new(history::create_consumer(&brokers, &group).unwrap());
+    consumer.subscribe(&[&topic]).unwrap();
     tokio::time::timeout(
         Duration::from_secs(60),
-        history::consume_one(&pool, &restarted),
+        history::consume_one(&pool, &consumer, &publisher, &dlq),
     )
     .await
     .unwrap()
     .unwrap();
+
+    let mut positions = TopicPartitionList::new();
+    positions.add_partition(&topic, 0);
+    let offset = |consumer: &rdkafka::consumer::StreamConsumer| {
+        consumer
+            .committed_offsets(positions.clone(), Duration::from_secs(10))
+            .unwrap()
+            .find_partition(&topic, 0)
+            .unwrap()
+            .offset()
+    };
+    assert_eq!(offset(&consumer), Offset::Offset(1));
+
+    // Invalid UTF-8 must survive forwarding byte-for-byte.
+    let producer: FutureProducer = ClientConfig::new()
+        .set("bootstrap.servers", &brokers)
+        .set("message.timeout.ms", "10000")
+        .create()
+        .unwrap();
+    let bad = [255u8, 0, 254];
+    producer
+        .send(
+            FutureRecord::to(&topic).key("bad").payload(&bad[..]),
+            Duration::from_secs(3),
+        )
+        .await
+        .unwrap();
+    let error = tokio::time::timeout(
+        Duration::from_secs(30),
+        history::consume_one(&pool, &consumer, &FailedPublisher, &dlq),
+    )
+    .await
+    .unwrap()
+    .unwrap_err();
+    assert!(error.contains("dead-letter delivery failed"));
+    assert_eq!(offset(&consumer), Offset::Offset(1));
+    consumer.unsubscribe();
+    drop(consumer);
+
+    let consumer = Arc::new(history::create_consumer(&brokers, &group).unwrap());
+    consumer.subscribe(&[&topic]).unwrap();
+    tokio::time::timeout(
+        Duration::from_secs(60),
+        history::consume_one(&pool, &consumer, &publisher, &dlq),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(offset(&consumer), Offset::Offset(2));
+
+    let dead_reader = history::create_consumer(&brokers, &format!("{group}-dlq")).unwrap();
+    dead_reader.subscribe(&[&dlq]).unwrap();
+    let dead_message = tokio::time::timeout(Duration::from_secs(60), dead_reader.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let rejected: DeadLetter = serde_json::from_slice(dead_message.payload().unwrap()).unwrap();
+    assert_eq!(rejected.id, format!("{topic}:0:1"));
+    assert_eq!(dead_message.key().unwrap(), rejected.id.as_bytes());
+    assert_eq!(rejected.payload_bytes.as_deref(), Some(&bad[..]));
+    assert_eq!(rejected.key_bytes.as_deref(), Some(&b"bad"[..]));
+    assert_eq!(rejected.source_topic, topic);
+    assert_eq!(rejected.source_partition, 0);
+    assert_eq!(rejected.source_offset, 1);
+    assert!(!rejected.error.is_empty());
+    drop(dead_message);
+
+    // A good event after the bad event still reaches history.
+    let mut next = event;
+    next.id = Uuid::new_v4();
+    next.payload.status = "maintenance".into();
+    publisher
+        .publish(
+            &topic,
+            &next.aggregate_id.to_string(),
+            &serde_json::to_string(&next).unwrap(),
+        )
+        .await
+        .unwrap();
+    tokio::time::timeout(
+        Duration::from_secs(30),
+        history::consume_one(&pool, &consumer, &publisher, &dlq),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(offset(&consumer), Offset::Offset(3));
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM vehicle_status_history")
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(count, 1);
-    let mut partitions = TopicPartitionList::new();
-    partitions.add_partition(&topic, 0);
-    let committed = restarted
-        .committed_offsets(partitions.clone(), Duration::from_secs(10))
-        .unwrap();
-    assert_eq!(
-        committed.find_partition(&topic, 0).unwrap().offset(),
-        Offset::Offset(1)
-    );
+    assert_eq!(count, 2);
 
-    publisher.publish(&topic, "bad", "not-json").await.unwrap();
+    // A valid message with a database failure must NOT be dead-lettered or committed.
+    sqlx::query("DROP TABLE vehicle_status_history")
+        .execute(&pool)
+        .await
+        .unwrap();
+    publisher.publish(&topic, "valid", &payload).await.unwrap();
     assert!(
         tokio::time::timeout(
             Duration::from_secs(30),
-            history::consume_one(&pool, &restarted)
+            history::consume_one(&pool, &consumer, &UnexpectedPublisher, &dlq)
         )
         .await
         .unwrap()
         .is_err()
     );
-    let committed = restarted
-        .committed_offsets(partitions, Duration::from_secs(10))
-        .unwrap();
-    assert_eq!(
-        committed.find_partition(&topic, 0).unwrap().offset(),
-        Offset::Offset(1)
-    );
-    restarted.unsubscribe();
-    drop(restarted);
+    assert_eq!(offset(&consumer), Offset::Offset(3));
+    consumer.unsubscribe();
+    dead_reader.unsubscribe();
+    drop(consumer);
+    drop(dead_reader);
     let results = admin
-        .delete_topics(&[&topic], &AdminOptions::new())
+        .delete_topics(&[&topic, &dlq], &AdminOptions::new())
         .await
         .unwrap();
-    assert!(results[0].is_ok());
+    assert!(results.iter().all(Result::is_ok));
 }
-
 #[sqlx::test]
 async fn transient_database_failure_retries_and_succeeds(pool: PgPool) {
     sqlx::raw_sql(
