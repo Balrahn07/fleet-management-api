@@ -58,13 +58,14 @@ async fn status_update_is_delivered_and_not_republished(pool: PgPool) {
 #[sqlx::test]
 async fn failed_delivery_remains_pending_and_can_retry(pool: PgPool) {
     let event_id = Uuid::new_v4();
+    let vehicle_id = Uuid::new_v4();
     let mut tx = pool.begin().await.unwrap();
     repositories::insert_outbox_event(
         &mut tx,
         event_id,
         "VehicleStatusChanged",
-        Uuid::new_v4(),
-        serde_json::json!({"status": "online"}),
+        vehicle_id,
+        serde_json::json!({"vehicle_id": vehicle_id, "status": "online"}),
     )
     .await
     .unwrap();

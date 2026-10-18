@@ -1006,3 +1006,7 @@ Set KAFKA_BROKERS (default localhost:9092) and provision the vehicle-events topi
 The outbox integration tests use isolated databases via sqlx::test and a fake
 publisher, so they require PostgreSQL with database-creation privileges but no
 Kafka. They cover successful delivery, retry, and atomic rollback.
+
+## Vehicle status history consumer
+
+A separate consumer stores Kafka status events idempotently and commits offsets only after a successful database write. See [the consumer walkthrough](history-consumer.md) for startup, retries, replay, and failure behavior.

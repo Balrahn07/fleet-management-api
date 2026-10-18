@@ -3,7 +3,10 @@ use std::{sync::Arc, time::Duration};
 use sqlx::PgPool;
 use tokio::sync::watch;
 
-use crate::{events::EventPublisher, models::OutboxEvent};
+use crate::{
+    events::{EventPublisher, VehicleEventType, VehicleStatusEvent},
+    models::OutboxEvent,
+};
 
 pub const VEHICLE_EVENTS_TOPIC: &str = "vehicle-events";
 
@@ -30,14 +33,16 @@ pub async fn publish_next(db: &PgPool, publisher: &dyn EventPublisher) -> Result
         return Ok(false);
     };
 
-    let payload = serde_json::json!({
-        "id": event.id,
-        "event_type": event.event_type,
-        "aggregate_id": event.aggregate_id,
-        "created_at": event.created_at,
-        "payload": event.payload,
-    })
-    .to_string();
+    let typed_event = VehicleStatusEvent {
+        id: event.id,
+        event_type: serde_json::from_value::<VehicleEventType>(serde_json::json!(event.event_type))
+            .map_err(|e| e.to_string())?,
+        aggregate_id: event.aggregate_id,
+        created_at: event.created_at,
+        payload: serde_json::from_value(event.payload).map_err(|e| e.to_string())?,
+    };
+    let payload = serde_json::to_string(&typed_event).map_err(|e| e.to_string())?;
+    VehicleStatusEvent::decode(payload.as_bytes())?;
 
     if let Err(error) = publisher
         .publish(

@@ -107,7 +107,10 @@ pub async fn update_vehicle(db: &PgPool, id: Uuid, status: String) -> Result<Veh
         Uuid::new_v4(),
         "VehicleStatusChanged",
         vehicle.id,
-        serde_json::json!({ "vehicle_id": vehicle.id, "status": vehicle.status }),
+        serde_json::json!(crate::events::VehicleStatusChanged {
+            vehicle_id: vehicle.id,
+            status: vehicle.status.clone()
+        }),
     )
     .await?;
 
